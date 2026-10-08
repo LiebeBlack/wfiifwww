@@ -49,23 +49,6 @@ jobs:
           restore-keys: |
             github-run-
 
-      # Decode the keystore from a secret and write app/release.properties
-      # ONLY when signing secrets are configured. The build.gradle.kts at the
-      # bottom of the file reads that file; if it's absent, assembleRelease
-      # still succeeds and produces a valid unsigned release APK (minify and
-      # shrink remain on) that you can install with adb and test.
-      - name: Prepare signing config (if secrets are set)
-        if: secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' && secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != null
-        run: |
-          echo -n "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
-          cat > app/release.properties <<EOF
-          storeFile=../keystore.jks
-          storePassword=${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-          EOF
-          echo "Prepared app/release.properties from secrets"
-
       # Build the release APK. If app/release.properties is present (signing
       # secrets were configured above) the APK will be signed; otherwise it
       # will be unsigned but still a real release build.
