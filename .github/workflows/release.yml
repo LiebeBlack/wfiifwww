@@ -9,14 +9,16 @@ on:
 env:
   JAVA_VERSION: "17"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
-  GRADLE_CACHE_KEY: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml') }}
-  GRADLE_CACHE_RESTORE_KEY: ${{ runner.os }}-gradle-
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     timeout-minutes: 40
+
+    env:
+      GRADLE_CACHE_KEY: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml') }}
+      GRADLE_CACHE_RESTORE_KEY: ${{ runner.os }}-gradle-
 
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +59,7 @@ jobs:
       # still succeeds and produces a valid unsigned release APK (minify and
       # shrink remain on) that you can install with adb and test.
       - name: Prepare signing config (if secrets are set)
-        if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' }}
+        if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' && secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != null }}
         run: |
           echo -n "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
           cat > app/release.properties <<EOF
