@@ -45,9 +45,9 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml') }}
+          key: github-run-${{ github.run_id }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml') }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
+            github-run-
 
       # Decode the keystore from a secret and write app/release.properties
       # ONLY when signing secrets are configured. The build.gradle.kts at the
