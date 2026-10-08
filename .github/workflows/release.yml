@@ -59,14 +59,13 @@ jobs:
       - name: Prepare signing config (if secrets are set)
         if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' }}
         run: |
-          echo -n "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" \
-            | base64 --decode > keystore.jks
+          echo -n "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > keystore.jks
           cat > app/release.properties <<EOF
-        storeFile=../keystore.jks
-        storePassword=${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
-        keyAlias=${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-        keyPassword=${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-        EOF
+          storeFile=../keystore.jks
+          storePassword=${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          EOF
           echo "Prepared app/release.properties from secrets"
 
       # Build the release APK. If app/release.properties is present (signing
