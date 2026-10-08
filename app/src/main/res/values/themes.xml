@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Base theme; Compose's MaterialTheme drives all real styling.
+     The window background is set to the dark surface color so the
+     splash/background never flashes white in dark mode. -->
+<resources>
+    <style name="Theme.WifiScanner" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

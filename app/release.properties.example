@@ -1,0 +1,28 @@
+# Optional signing configuration for release builds.
+# Copy this file to app/release.properties and fill the values when you want
+# a signed release APK from GitHub Actions (workflow_dispatch and tag builds).
+#
+# Values are NEVER committed: keep this .example in the repo as the template
+# and add the real keystore file + secrets to GitHub (Settings -> Secrets).
+#
+# Keystore:
+#   storeFile=../keystore.jks        # relative to the project root; uploaded
+#                                   # at build time from ANDROID_RELEASE_KEYSTORE_BASE64
+#   storePassword=changeme
+#   keyAlias=myreleasekey
+#   keyPassword=changeme
+#
+# Reproducible unsigned release:
+#   If app/release.properties is absent, the workflow produces an unsigned
+#   release APK (minify enabled, shrink on) that is still a valid APK
+#   artifact you can install with adb and test. Signing is then layered on
+#   only when the secrets below are set.
+#
+# GitHub secrets to add (Actions secrets, not repo variables):
+#   ANDROID_RELEASE_KEYSTORE_BASE64   # base64 of your .jks/.keystore
+#   ANDROID_RELEASE_KEYSTORE_PASSWORD
+#   ANDROID_RELEASE_KEY_ALIAS
+#   ANDROID_RELEASE_KEY_PASSWORD
+#
+# Recommendation: use a release key, not your debug key, for branded builds.
+# Unsigned artifacts are fine for internal testing and first-release CI.

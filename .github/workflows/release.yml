@@ -1,0 +1,135 @@
+name: Release APK
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: "17"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
+  GRADLE_CACHE_KEY: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml') }}
+  GRADLE_CACHE_RESTORE_KEY: ${{ runner.os }}-gradle-
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "${{ env.JAVA_VERSION }}"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Grant execute permission to Gradle wrapper
+        run: chmod +x gradlew
+
+      # If GitHub Actions doesn't already provide SDK licenses on the runner,
+      # accept them so AGP-based builds don't stall. Only needed on fresh VMs.
+      - name: Accept Android SDK licenses
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license"
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+
+      - name: Restore Gradle dependency cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ env.GRADLE_CACHE_KEY }}
+          restore-keys: |
+            ${{ env.GRADLE_CACHE_RESTORE_KEY }}
+
+      # Decode the keystore from a secret and write app/release.properties
+      # ONLY when signing secrets are configured. The build.gradle.kts at the
+      # bottom of the file reads that file; if it's absent, assembleRelease
+      # still succeeds and produces a valid unsigned release APK (minify and
+      # shrink remain on) that you can install with adb and test.
+      - name: Prepare signing config (if secrets are set)
+        if: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo -n "${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}" \
+            | base64 --decode > keystore.jks
+          cat > app/release.properties <<EOF
+        storeFile=../keystore.jks
+        storePassword=${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+        keyAlias=${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+        keyPassword=${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        EOF
+          echo "Prepared app/release.properties from secrets"
+
+      # Build the release APK. If app/release.properties is present (signing
+      # secrets were configured above) the APK will be signed; otherwise it
+      # will be unsigned but still a real release build.
+      - name: Build release APK
+        id: build
+        run: |
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Locate the built APK
+        id: apk
+        run: |
+          apks=$(find app/build/outputs/apk/release -name '*.apk' -print | sort)
+          if [ -z "$apks" ]; then
+            echo "::error::Expected app/build/outputs/apk/release/*.apk but found none"
+            find app/build/outputs -name '*.apk' -print >&2 || true
+            exit 1
+          fi
+          APK=$(echo "$apks" | head -n 1)
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+          echo "apk_size=$(stat -Lc %s "$APK")" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$(basename "$APK")" >> "$GITHUB_OUTPUT"
+
+      - name: Show APK metadata and signing state
+        run: |
+          APK="${{ steps.apk.outputs.apk_path }}"
+          echo "APK=${APK} size=${{ steps.apk.outputs.apk_size }}B name=${{ steps.apk.outputs.apk_name }}"
+          unzip -l "$APK" | tail -n 1
+          if command -v apksigner >/dev/null 2>&1; then
+            apksigner verify --print-certs "$APK" || true
+          fi
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wifiscanner-release-apk-${{ github.ref_type == 'tag' && github.ref_name || 'HEAD' }}
+          path: ${{ steps.apk.outputs.apk_path }}
+          retention-days: 25
+
+      - name: Publish to GitHub Release (tagged builds only)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          prerelease: true
+          files: ${{ steps.apk.outputs.apk_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Write checksums artifact
+        if: always()
+        run: |
+          APK="${{ steps.apk.outputs.apk_path }}"
+          printf "APK=%s\nSHA256=%s\nMD5=%s\n" \
+            "${{ steps.apk.outputs.apk_name }}" \
+            "$(sha256sum "$APK" | cut -d' ' -f1)" \
+            "$(md5sum "$APK" | cut -d' ' -f1)" > checksums.txt
+
+      - name: Upload checksums artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wifiscanner-checksums
+          path: checksums.txt
+          retention-days: 25

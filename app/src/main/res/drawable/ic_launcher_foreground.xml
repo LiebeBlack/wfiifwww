@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple Wi-Fi style glyph for the launcher foreground. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="27"
+        android:translateY="27">
+        <!-- Three arcs + center dot, drawn from standard material "wifi" geometry. -->
+        <path
+            android:fillColor="#4FC3F7"
+            android:pathData="M54,88L38.3,72.3C42.6,68 48.1,65.5 54,65.5C59.9,65.5 65.4,68 69.7,72.3L54,88Z" />
+        <path
+            android:fillColor="#4FC3F7"
+            android:pathData="M54,47.2C64.8,47.2 74.9,51.3 82.5,58.9L93.6,47.8C82.8,37 68.6,31 54,31C39.4,31 25.2,37 14.4,47.8L25.5,58.9C33.1,51.3 43.2,47.2 54,47.2Z" />
+        <path
+            android:fillColor="#81D4FA"
+            android:pathData="M54,14.5C60.9,14.5 67.6,15.9 73.8,18.5L84.9,7.4C75.7,3.6 65,1.5 54,1.5C43,1.5 32.3,3.6 23.1,7.4L34.2,18.5C40.4,15.9 47.1,14.5 54,14.5Z" />
+    </group>
+</vector>
