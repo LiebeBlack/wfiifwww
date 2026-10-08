@@ -94,9 +94,6 @@ jobs:
           draft: false
           prerelease: true
           files: ${{ steps.apk.outputs.apk_path }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Write checksums artifact
         if: always()
         run: |
