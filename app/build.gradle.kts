@@ -71,40 +71,25 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-// ------------------------------------------------------------------
-    // ProGuard consumer rules: shipped so downstream apps that depend on this
-    // module (or that repackage it) keep the public API intact when they enable
-    // minification. Identical to the private proguard-rules.pro, surfaced via
-    // consumer-rules so R8 applies it transitively.
-    // ------------------------------------------------------------------
-    consumerProguardFiles("proguard-rules.pro")
-
 // Optional release signing (GitHub Actions secrets path).
-    //
-    // A real signing config is only instantiated when app/release.properties
-    // exists (which only happens when you supply the keystore at build time via
-    // ANDROID_RELEASE_KEYSTORE_BASE64). In that case the release build type is
-    // signed with that config. Otherwise assembleRelease still succeeds and
-    // produces a valid unsigned release APK — minification and resource
-    // shrinking remain enabled so the artifact is still a genuine release
-    // build you can install with adb and test.
-    // ------------------------------------------------------------------
-    import java.util.Properties
+//
+// A real signing config is only instantiated when app/release.properties
+// exists (supplied via build-time secrets). In that case the release build type
+// is signed with that config. Otherwise assembleRelease still succeeds and
+// produces a valid unsigned release APK — minification and resource shrinking
+// remain enabled so the artifact is still a genuine release build.
+//
+val releasePropsFile = rootProject.file("app/release.properties")
+if (releasePropsFile.exists()) {
+    val releaseProps = java.util.Properties()
+    releasePropsFile.inputStream().use { releaseProps.load(it) }
 
-    val releasePropsFile = rootProject.file("app/release.properties")
-    val releaseProps: Properties? = if (releasePropsFile.exists()) {
-        val p = Properties()
-        releasePropsFile.inputStream().use { p.load(it) }
-        p
-    } else null
-
-    if (releaseProps != null) {
-        val releaseSigning = android.signingConfigs.create("release")
-        releaseSigning.apply {
-            storeFile = file(releaseProps.getProperty("storeFile", "../keystore.jks"))
-            storePassword = releaseProps.getProperty("storePassword", "")
-            keyAlias = releaseProps.getProperty("keyAlias", "")
-            keyPassword = releaseProps.getProperty("keyPassword", "")
-        }
-        android.buildTypes.getByName("release").signingConfig = releaseSigning
+    val releaseSigning = android.signingConfigs.create("release")
+    releaseSigning.apply {
+        storeFile = file(releaseProps.getProperty("storeFile", "../keystore.jks"))
+        storePassword = releaseProps.getProperty("storePassword", "")
+        keyAlias = releaseProps.getProperty("keyAlias", "")
+        keyPassword = releaseProps.getProperty("keyPassword", "")
     }
+    android.buildTypes.getByName("release").signingConfig = releaseSigning
+}
