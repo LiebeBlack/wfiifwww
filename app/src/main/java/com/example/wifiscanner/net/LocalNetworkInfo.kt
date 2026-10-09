@@ -241,14 +241,10 @@ object LocalNetworkInfo {
 
     /** Converts a dotted mask ("255.255.255.0") to its prefix length. */
     internal fun maskToInt(mask: String): Int? {
-        return try {
-            val value = ipv4ToInt(mask) ?: return@try null
-            val prefix = value.toString(2).padStart(32, '0').takeWhile { it == '1' }.length
-            val expected = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
-            prefix.takeIf { expected == value }
-        } finally {
-            Unit
-        }
+        val value = ipv4ToInt(mask) ?: return null
+        val prefix = value.toString(2).padStart(32, '0').takeWhile { it == '1' }.length
+        val expected = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
+        return prefix.takeIf { expected == value }
     }
 
     private fun Inet4Address.isInSubnet(subnet: Subnet): Boolean {
