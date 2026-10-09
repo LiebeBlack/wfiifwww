@@ -79,9 +79,10 @@ dependencies {
 // produces a valid unsigned release APK — minification and resource shrinking
 // remain enabled so the artifact is still a genuine release build.
 //
+
 val releasePropsFile = rootProject.file("app/release.properties")
 if (releasePropsFile.exists()) {
-    val releaseProps = java.util.Properties()
+    val releaseProps: java.util.Properties = java.util.Properties()
     releasePropsFile.inputStream().use { releaseProps.load(it) }
 
     val releaseSigning = android.signingConfigs.create("release")
