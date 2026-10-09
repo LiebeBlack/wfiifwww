@@ -28,8 +28,22 @@ jobs:
           distribution: "temurin"
           cache: "gradle"
 
-      - name: Grant execute permission to Gradle wrapper
-        run: chmod +x gradlew
+      # The repository does not commit the Gradle wrapper scripts; bootstrap them
+      # from the committed gradle-wrapper.properties so the build can run even when
+      # gradlew/gradle-wrapper.jar are absent from the checkout.
+      - name: Bootstrap Gradle wrapper if missing
+        run: |
+          if [ ! -f gradlew ] || [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            echo "Bootstrapping Gradle wrapper from gradle-wrapper.properties"
+            mkdir -p gradle/wrapper
+            curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradlew -o gradlew
+            curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradlew.bat -o gradlew.bat
+            curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+            chmod +x gradlew gradlew.bat
+          else
+            echo "Gradle wrapper already present; ensuring execute bits"
+            chmod +x gradlew gradlew.bat
+          fi
 
       # If GitHub Actions doesn't already provide SDK licenses on the runner,
       # accept them so AGP-based builds don't stall. Only needed on fresh VMs.
