@@ -105,19 +105,21 @@ object LocalNetworkInfo {
     }
 
     /** Strategy 2: whatever the ConnectivityManager says the link is. */
-    private fun viaConnectivityManager(context: Context): Subnet? = try {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return null
-        val properties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
-        val link = properties.linkAddresses.firstOrNull { candidate ->
-            val addr = candidate.address
-            addr is Inet4Address && !addr.isLoopbackAddress && isPrivateIpv4(addr.hostAddress)
-        } ?: return null
-        val ip = link.address?.hostAddress ?: return null
-        val prefix = link.prefixLength.takeIf { it in 1..32 } ?: 24
-        Subnet(networkAddress = networkOf(ip, prefix), prefixLength = prefix)
-    } catch (_: Exception) {
-        null
+    private fun viaConnectivityManager(context: Context): Subnet? {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return null
+            val properties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
+            val link = properties.linkAddresses.firstOrNull { candidate ->
+                val addr = candidate.address
+                addr is Inet4Address && !addr.isLoopbackAddress && isPrivateIpv4(addr.hostAddress)
+            } ?: return null
+            val ip = link.address?.hostAddress ?: return null
+            val prefix = link.prefixLength.takeIf { it in 1..32 } ?: 24
+            Subnet(networkAddress = networkOf(ip, prefix), prefixLength = prefix)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
