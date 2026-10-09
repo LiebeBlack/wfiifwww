@@ -122,28 +122,34 @@ object NetworkStatistics {
      * 802.11 channel from the centre frequency: 2.4 GHz channels are
      * 5 MHz-spaced from 2407 MHz, 5/6 GHz channels from 5000 MHz.
      */
-    internal fun channelOf(frequencyMhz: Int): Int? = when (frequencyMhz) {
-        in 2412..2484 -> (frequencyMhz - 2407) / 5
-        in 5000..5895 -> (frequencyMhz - 5000) / 5
-        in 5925..7125 -> (frequencyMhz - 5950) / 5
-        else -> null
+    internal fun channelOf(frequencyMhz: Int): Int? {
+        return when (frequencyMhz) {
+            in 2412..2484 -> (frequencyMhz - 2407) / 5
+            in 5000..5895 -> (frequencyMhz - 5000) / 5
+            in 5925..7125 -> (frequencyMhz - 5950) / 5
+            else -> null
+        }
     }
 
     /** Human band name for a frequency. */
-    internal fun bandOf(frequencyMhz: Int): String? = when (frequencyMhz) {
-        in 2400..2500 -> "2.4 GHz"
-        in 4900..5895 -> "5 GHz"
-        in 5925..7125 -> "6 GHz"
-        else -> null
+    internal fun bandOf(frequencyMhz: Int): String? {
+        return when (frequencyMhz) {
+            in 2400..2500 -> "2.4 GHz"
+            in 4900..5895 -> "5 GHz"
+            in 5925..7125 -> "6 GHz"
+            else -> null
+        }
     }
 
     /** Coarse 0..4 signal level from RSSI in dBm (5 = excellent). */
-    internal fun signalLevelOf(rssiDbm: Int): Int = when {
-        rssiDbm >= -50 -> 4
-        rssiDbm >= -60 -> 3
-        rssiDbm >= -70 -> 2
-        rssiDbm >= -80 -> 1
-        else -> 0
+    internal fun signalLevelOf(rssiDbm: Int): Int {
+        return when {
+            rssiDbm >= -50 -> 4
+            rssiDbm >= -60 -> 3
+            rssiDbm >= -70 -> 2
+            rssiDbm >= -80 -> 1
+            else -> 0
+        }
     }
 
     /** Usable host addresses in a subnet, capped at the scanner's own cap. */

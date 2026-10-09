@@ -194,14 +194,16 @@ object LocalNetworkInfo {
     }
 
     /** The device's own non-loopback IPv4 on the given subnet's interface. */
-    fun selfIp(subnet: Subnet): String? = try {
-        NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-            .flatMap { it.inetAddresses.toList() }
-            .filterIsInstance<Inet4Address>()
-            .firstOrNull { !it.isLoopbackAddress && it.isInSubnet(subnet) }
-            ?.hostAddress
-    } catch (_: Exception) {
-        null
+    fun selfIp(subnet: Subnet): String? {
+        return try {
+            NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+                .flatMap { it.inetAddresses.toList() }
+                .filterIsInstance<Inet4Address>()
+                .firstOrNull { !it.isLoopbackAddress && it.isInSubnet(subnet) }
+                ?.hostAddress
+        } catch (_: Exception) {
+            null
+        }
     }
 
     // ------------------------------------------------------------------
@@ -239,19 +241,23 @@ object LocalNetworkInfo {
 
     /** Converts a dotted mask ("255.255.255.0") to its prefix length. */
     internal fun maskToInt(mask: String): Int? {
-        val value = ipv4ToInt(mask) ?: return null
-        // Count leading 1 bits, then verify the mask is exactly that many
-        // contiguous ones followed by zeros (rejects non-contiguous masks).
-        val prefix = value.toString(2).padStart(32, '0').takeWhile { it == '1' }.length
-        val expected = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
-        return prefix.takeIf { expected == value }
+        return try {
+            val value = ipv4ToInt(mask) ?: return@try null
+            val prefix = value.toString(2).padStart(32, '0').takeWhile { it == '1' }.length
+            val expected = (0xFFFFFFFFL shl (32 - prefix)) and 0xFFFFFFFFL
+            prefix.takeIf { expected == value }
+        } finally {
+            Unit
+        }
     }
 
     private fun Inet4Address.isInSubnet(subnet: Subnet): Boolean {
         val me = ipv4ToInt(hostAddress ?: return false) ?: return false
         val base = ipv4ToInt(subnet.networkAddress) ?: return false
         val mask = (0xFFFFFFFFL shl (32 - subnet.prefixLength)) and 0xFFFFFFFFL
-        return me and mask == base and mask
+        val a = me and mask
+        val b = base and mask
+        return a == b
     }
 
     /** Interface name prefixes used by mobile data and VPN tunnels. */
