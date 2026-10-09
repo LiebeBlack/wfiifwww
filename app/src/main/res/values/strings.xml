@@ -30,4 +30,65 @@
     <string name="unknown_vendor">Unknown vendor</string>
     <string name="no_hostname">No hostname</string>
     <string name="own_device">This device</string>
+    <!-- Shown instead of the location button when no method recovered a MAC;
+         labels are MAC-keyed, so saving would silently do nothing. -->
+    <string name="no_mac_hint">No MAC address found, so a location label cannot be saved for this device.</string>
+
+    <!-- Degraded-discovery banner (a method was blocked, results still shown). -->
+    <string name="limited_detection">Limited detection</string>
+    <string name="detected_via">detected via %1$s</string>
+
+    <!-- Result list controls. -->
+    <string name="search_hint">Search name, IP, MAC, brand…</string>
+    <string name="clear_search">Clear search</string>
+    <string name="no_matches">No devices match your search.</string>
+    <string name="sort">Sort</string>
+    <string name="sort_ip">IP address</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_kind">Device type</string>
+    <string name="sort_vendor">Brand</string>
+    <string name="export">Share results</string>
+
+    <!-- Device detail sheet. -->
+    <string name="field_ip">IP address</string>
+    <string name="field_mac">MAC address</string>
+    <string name="field_hostname">Hostname</string>
+    <string name="field_vendor">Brand</string>
+    <string name="field_model">Model</string>
+    <string name="field_location">Location</string>
+    <string name="field_services">Services</string>
+    <string name="field_ports">Open ports</string>
+    <string name="field_sources">Detected via</string>
+    <string name="copy">Copy</string>
+    <string name="copied_to_clipboard">Copied to clipboard</string>
+
+    <!-- Network / Wi-Fi statistics card. -->
+    <string name="stats_title">Network details</string>
+    <string name="stats_expand">Expand</string>
+    <string name="stats_collapse">Collapse</string>
+    <string name="stats_no_wifi">No Wi-Fi connection</string>
+    <string name="stat_scan_time">Scan time</string>
+    <string name="stat_devices">Devices found</string>
+    <string name="stat_connection">Connection</string>
+    <string name="stat_metered">Metered</string>
+    <string name="stat_wifi_enabled">Wi-Fi enabled</string>
+    <string name="stat_ssid">Network (SSID)</string>
+    <string name="stat_bssid">Access point</string>
+    <string name="stat_band_channel">Band</string>
+    <string name="stat_channel">channel %1$d</string>
+    <string name="stat_link_speed">Link speed</string>
+    <string name="stat_rx_tx">RX / TX</string>
+    <string name="stat_signal">Signal</string>
+    <string name="stat_ip">IP address</string>
+    <string name="stat_network">Network</string>
+    <string name="stat_broadcast">Broadcast</string>
+    <string name="stat_gateway">Gateway</string>
+    <string name="stat_dns">DNS</string>
+    <string name="stat_dhcp">DHCP server</string>
+    <string name="stat_lease">Lease</string>
+    <string name="stat_hosts">Scannable hosts</string>
+    <string name="stat_bandwidth">Link bandwidth</string>
+    <string name="stat_vpn">VPN active</string>
+    <string name="value_yes">Yes</string>
+    <string name="value_no">No</string>
 </resources>

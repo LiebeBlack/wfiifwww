@@ -26,8 +26,13 @@ import kotlin.coroutines.resume
 class HostnameResolver(context: Context) {
 
     private val appContext = context.applicationContext
+
+    /**
+     * Null on ROMs/builds without a DNS-SD service. Any mDNS work then
+     * degrades to an empty result instead of taking the whole scan down.
+     */
     private val nsdManager =
-        appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
+        appContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
 
     /** IP -> hostname cache that survives across scans. */
     private val mdnsCache = ConcurrentHashMap<String, String>()
@@ -83,6 +88,7 @@ class HostnameResolver(context: Context) {
      * capped, and failures are swallowed (most services simply won't exist).
      */
     suspend fun discoverMdns(timeoutMillis: Long = 4_000): Map<String, String> {
+        val manager = nsdManager ?: return emptyMap()
         // Lives outside the timeout so partial results survive a timeout.
         val discovered = HashMap<String, String>(16)
         withTimeoutOrNull(timeoutMillis) {
@@ -122,7 +128,7 @@ class HostnameResolver(context: Context) {
                 // Kick off one discovery per service type.
                 for (type in interestingServices) {
                     try {
-                        nsdManager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
+                        manager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
                     } catch (_: Exception) {
                         synchronized(pending) {
                             pending.remove(type)
@@ -132,7 +138,7 @@ class HostnameResolver(context: Context) {
                 }
 
                 cont.invokeOnCancellation {
-                    try { nsdManager.stopServiceDiscovery(listener) } catch (_: Exception) {}
+                    try { manager.stopServiceDiscovery(listener) } catch (_: Exception) {}
                 }
             }
         }
@@ -144,8 +150,12 @@ class HostnameResolver(context: Context) {
         info: NsdServiceInfo,
         onResolved: (ip: String?, name: String?) -> Unit,
     ) {
+        val manager = nsdManager ?: run {
+            onResolved(null, null)
+            return
+        }
         try {
-            nsdManager.resolveService(info, object : NsdManager.ResolveListener {
+            manager.resolveService(info, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
                     val ip = resolved.host?.hostAddress
                     val name = resolved.serviceName?.takeIf { it.isNotBlank() }

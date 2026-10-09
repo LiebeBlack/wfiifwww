@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -82,7 +84,7 @@ dependencies {
 
 val releasePropsFile = rootProject.file("app/release.properties")
 if (releasePropsFile.exists()) {
-    val releaseProps: java.util.Properties = java.util.Properties()
+    val releaseProps = Properties()
     releasePropsFile.inputStream().use { releaseProps.load(it) }
 
     val releaseSigning = android.signingConfigs.create("release")
