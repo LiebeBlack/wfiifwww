@@ -137,19 +137,21 @@ object LocalNetworkInfo {
     }
 
     /** Strategy 4: legacy WifiManager DHCP info. */
-    private fun viaDhcpInfo(context: Context): Subnet? = try {
-        @Suppress("DEPRECATION")
-        val dhcp = (context.applicationContext
-            .getSystemService(Context.WIFI_SERVICE) as? WifiManager)
-            ?.dhcpInfo
-        if (dhcp == null || dhcp.ipAddress == 0 || dhcp.netmask == 0) return null
+    private fun viaDhcpInfo(context: Context): Subnet? {
+        return try {
+            @Suppress("DEPRECATION")
+            val dhcp = (context.applicationContext
+                .getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+                ?.dhcpInfo
+            if (dhcp == null || dhcp.ipAddress == 0 || dhcp.netmask == 0) return null
 
-        val ip = littleEndianIntToIpv4(dhcp.ipAddress)
-        val mask = littleEndianIntToIpv4(dhcp.netmask)
-        val prefix = maskToInt(mask) ?: 24
-        Subnet(networkAddress = networkOf(ip, prefix), prefixLength = prefix)
-    } catch (_: Exception) {
-        null
+            val ip = littleEndianIntToIpv4(dhcp.ipAddress)
+            val mask = littleEndianIntToIpv4(dhcp.netmask)
+            val prefix = maskToInt(mask) ?: 24
+            Subnet(networkAddress = networkOf(ip, prefix), prefixLength = prefix)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**

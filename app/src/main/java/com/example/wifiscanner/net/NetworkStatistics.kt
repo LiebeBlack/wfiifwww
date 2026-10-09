@@ -179,20 +179,22 @@ object NetworkStatistics {
 
     /** DHCP lease details; null on setups without DHCP (static IP). */
     @Suppress("DEPRECATION")
-    private fun readDhcpInfo(context: Context): DhcpSnapshot? = try {
-        val dhcp = (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
-            ?.dhcpInfo ?: return null
-        if (dhcp.ipAddress == 0) return null
-        DhcpSnapshot(
-            ip = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.ipAddress),
-            gateway = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.gateway),
-            dns1 = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.dns1),
-            dns2 = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.dns2),
-            server = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.serverAddress),
-            leaseSeconds = dhcp.leaseDuration,
-        )
-    } catch (_: Exception) {
-        null
+    private fun readDhcpInfo(context: Context): DhcpSnapshot? {
+        return try {
+            val dhcp = (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+                ?.dhcpInfo ?: return null
+            if (dhcp.ipAddress == 0) return null
+            DhcpSnapshot(
+                ip = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.ipAddress),
+                gateway = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.gateway),
+                dns1 = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.dns1),
+                dns2 = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.dns2),
+                server = LocalNetworkInfo.littleEndianIntToIpv4(dhcp.serverAddress),
+                leaseSeconds = dhcp.leaseDuration,
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** Transport, metered flag, VPN presence and reported link bandwidth. */
