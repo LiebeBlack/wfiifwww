@@ -190,9 +190,9 @@ object LocalNetworkInfo {
         val value = ipv4ToInt(ip ?: return false) ?: return false
         val first = (value shr 24) and 0xFF
         val second = (value shr 16) and 0xFF
-        return first == 10L ||
-            (first == 172L && second in 16..31) ||
-            (first == 192L && second == 168L)
+        return first == 10 ||
+            (first == 172 && second in 16..31) ||
+            (first == 192 && second == 168)
     }
 
     /** The device's own non-loopback IPv4 on the given subnet's interface. */
