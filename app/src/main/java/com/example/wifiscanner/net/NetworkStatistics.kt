@@ -154,9 +154,11 @@ object NetworkStatistics {
 
     /** Usable host addresses in a subnet, capped at the scanner's own cap. */
     internal fun usableHosts(prefixLength: Int): Int {
-        val prefix = prefixLength.coerceIn(0, 32)
-        val hosts = (1L shl (32 - prefix)).coerceAtMost(1024L)
-        return (hosts - 2).coerceAtLeast(0).toInt()
+        return (prefixLength.coerceIn(0, 32))
+            .let { prefix ->
+                val hosts = (1L shl (32 - prefix)).coerceAtMost(1024L)
+                (hosts - 2).coerceAtLeast(0).toInt()
+            }
     }
 
     // ------------------------------------------------------------------
