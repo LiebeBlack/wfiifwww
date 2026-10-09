@@ -198,27 +198,29 @@ object NetworkStatistics {
     }
 
     /** Transport, metered flag, VPN presence and reported link bandwidth. */
-    private fun readCapabilities(context: Context): Capabilities? = try {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return null
-        val active = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(active) ?: return null
-        Capabilities(
-            transport = when {
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile data"
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "Bluetooth"
-                else -> "Other"
-            },
-            metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+    private fun readCapabilities(context: Context): Capabilities? {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return null
+            val active = cm.activeNetwork ?: return null
+            val caps = cm.getNetworkCapabilities(active) ?: return null
+            Capabilities(
+                transport = when {
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile data"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "Bluetooth"
+                    else -> "Other"
+                },
+                metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
             vpn = anyVpnActive(cm),
             downstreamKbps = caps.linkDownstreamBandwidthKbps.takeIf { it > 0 },
             upstreamKbps = caps.linkUpstreamBandwidthKbps.takeIf { it > 0 },
         )
-    } catch (_: Exception) {
-        null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun anyVpnActive(cm: ConnectivityManager): Boolean? = try {
