@@ -231,7 +231,10 @@ object NetworkStatistics {
         return when (frequencyMhz) {
             in 2412..2484 -> (frequencyMhz - 2407) / 5
             in 5000..5895 -> (frequencyMhz - 5000) / 5
-            in 5925..7125 -> (frequencyMhz - 5950) / 5
+            // 6 GHz starts at channel 1 (5950 MHz base): below that, the
+            // frequency is out of band and a formula would invent a negative
+            // channel number in the UI.
+            in 5950..7125 -> (frequencyMhz - 5950) / 5
             else -> null
         }
     }

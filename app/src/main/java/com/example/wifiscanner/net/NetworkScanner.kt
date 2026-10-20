@@ -12,6 +12,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -179,17 +180,40 @@ class NetworkScanner(context: Context) {
             val netbiosJob = async(Dispatchers.IO) { safeNetbios(subnet) }
 
             if (subnet != null) {
-                publish(
-                    phase = "Sondeando ${subnet.networkAddress}/${subnet.prefixLength} " +
-                        "($hostCount direcciones)…",
-                )
-                // The sweep callback fires from worker coroutines, so results
-                // are collected thread-safely and merged afterwards.
+                val basePhase =
+                    "Sondeando ${subnet.networkAddress}/${subnet.prefixLength} ($hostCount direcciones)"
+                publish(phase = "$basePhase…")
+                // The sweep runs in a worker while this coroutine keeps merging
+                // whatever has answered so far: the list fills in live during
+                // the ~30 s a /24 takes instead of staying frozen until the
+                // very end (the callback fires on worker threads, so the
+                // arrival detection happens here, not inside the callback).
                 val alive = ConcurrentHashMap<String, PingSweep.HostResult>()
-                PingSweep.sweep(subnet) { host -> alive[host.ip] = host }
-                for (host in alive.values) {
-                    merge(ip = host.ip, source = host.source, ports = host.openPorts)
+                val merged = HashSet<String>()
+                val sweepJob = async(Dispatchers.IO) {
+                    PingSweep.sweep(subnet) { host -> alive[host.ip] = host }
                 }
+                // Merges every host that has arrived since the last call.
+                fun drainAlive(): Boolean {
+                    var added = false
+                    for (host in alive.values) {
+                        if (merged.add(host.ip)) {
+                            merge(ip = host.ip, source = host.source, ports = host.openPorts)
+                            added = true
+                        }
+                    }
+                    return added
+                }
+                while (sweepJob.isActive) {
+                    if (drainAlive()) {
+                        publish(phase = "$basePhase · ${merged.size} respuestas…")
+                    }
+                    // Wake up as soon as the sweep ends, or every 500 ms to
+                    // show the hosts found meanwhile.
+                    withTimeoutOrNull(SWEEP_POLL_MILLIS) { sweepJob.join() }
+                }
+                sweepJob.await()
+                drainAlive()
                 // The sweep forced the kernel to resolve every live host, so a
                 // second read now recovers MAC addresses (and therefore OUI
                 // vendors) that were missing before the probes. Merged only
@@ -404,5 +428,8 @@ class NetworkScanner(context: Context) {
             "No se pudo determinar la subred local, así que se omitió el barrido de " +
                 "direcciones; los dispositivos se buscaron mediante anuncios multicast " +
                 "(SSDP/mDNS)."
+
+        /** How often the scan reports the sweep's progress while it runs. */
+        private const val SWEEP_POLL_MILLIS = 500L
     }
 }

@@ -237,6 +237,7 @@
     <string name="settings_location_services">Ubicación del sistema</string>
     <string name="settings_permission_granted">Concedido</string>
     <string name="settings_permission_denied">Denegado</string>
+    <string name="settings_state_off">Desactivado</string>
     <string name="settings_permissions_desc">Android necesita ambos para mostrar el nombre real de la red Wi-Fi. El análisis de la red local funciona aunque la ubicación esté desactivada.</string>
     <string name="settings_open">Abrir</string>
     <string name="settings_data">Datos</string>

@@ -1,6 +1,7 @@
 package com.example.wifiscanner.ui.screens
 
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -176,6 +177,9 @@ fun SettingsScreen(
                 PermissionRow(
                     title = stringResource(R.string.settings_location_services),
                     granted = locationEnabled,
+                    // The system switch is off, not denied: "Denegado" would
+                    // send the user to the permissions screen instead.
+                    offLabelRes = R.string.settings_state_off,
                     onOpen = { SystemSettings.openLocationSettings(context) },
                 )
                 Spacer(Modifier.height(4.dp))
@@ -382,6 +386,7 @@ private fun PermissionRow(
     title: String,
     granted: Boolean,
     onOpen: () -> Unit,
+    @StringRes offLabelRes: Int = R.string.settings_permission_denied,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -392,12 +397,10 @@ private fun PermissionRow(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = stringResource(
-                    if (granted) R.string.settings_permission_granted
-                    else R.string.settings_permission_denied
-                ),
+            )                Text(
+                    text = stringResource(
+                        if (granted) R.string.settings_permission_granted else offLabelRes
+                    ),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (granted) {
                     MaterialTheme.colorScheme.primary

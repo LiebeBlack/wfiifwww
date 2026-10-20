@@ -315,6 +315,11 @@ private fun LinkStatusRow(stats: NetworkStatistics.WifiStatistics) {
             MaterialTheme.colorScheme.primary
         stats.wifiEnabled == false -> stringResource(R.string.dashboard_wifi_off) to
             MaterialTheme.colorScheme.error
+        stats.transport != null && stats.transport != NetworkStatistics.Transport.Wifi ->
+            // Ethernet / cellular / VPN only: claiming "Wi-Fi sin conexión"
+            // would be wrong — there *is* a link, just not the Wi-Fi one.
+            stringResource(R.string.dashboard_other_transport, stats.transport.displayName()) to
+                MaterialTheme.colorScheme.tertiary
         else -> stringResource(R.string.dashboard_wifi_disconnected) to
             MaterialTheme.colorScheme.tertiary
     }

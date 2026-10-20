@@ -257,16 +257,37 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         loadStats(delayMillis = 400)
     }
 
+    /**
+     * Set when a refresh is requested while another one is pending or in
+     * flight. Touched only from the main thread (UI, lifecycle effects and the
+     * connectivity callbacks all arrive there), so no locking is needed.
+     */
+    private var statsDirty = false
+
     private fun loadStats(delayMillis: Long) {
-        statsJob?.cancel()
+        val pending = statsJob
+        if (pending != null && pending.isActive) {
+            // Never restart a pending debounce: capability callbacks can fire
+            // faster than the window, and cancelling on every one postponed
+            // the read indefinitely (a permanently stale network header).
+            // Remember the request instead — the running job re-runs once.
+            statsDirty = true
+            return
+        }
+        statsDirty = false
         statsJob = viewModelScope.launch {
             if (delayMillis > 0) delay(delayMillis)
-            // Interface enumeration and the OUI asset read are blocking I/O,
-            // so this belongs on the IO pool rather than Default.
-            val snapshot = withContext(Dispatchers.IO) {
-                NetworkStatistics.snapshot(getApplication())
-            }
-            _stats.value = snapshot
+            // Absorb bursts of callbacks with one extra read instead of one
+            // job per callback. The body runs on the main dispatcher; only the
+            // snapshot itself moves to the IO pool (interface enumeration and
+            // the OUI asset read are blocking I/O).
+            do {
+                statsDirty = false
+                val snapshot = withContext(Dispatchers.IO) {
+                    NetworkStatistics.snapshot(getApplication())
+                }
+                _stats.value = snapshot
+            } while (statsDirty)
         }
     }
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -98,7 +99,11 @@ class HostnameResolver(context: Context) {
     suspend fun discoverMdns(timeoutMillis: Long = 4_000): Map<String, String> {
         val manager = nsdManager ?: return emptyMap()
         // Lives outside the timeout so partial results survive a timeout.
-        val discovered = HashMap<String, String>(16)
+        // Concurrent on purpose: a resolve that is still in flight when the
+        // timeout fires can call back *after* this function returned, and the
+        // caller iterates the returned map — a plain HashMap would then throw
+        // ConcurrentModificationException on the scanner thread.
+        val discovered = ConcurrentHashMap<String, String>(16)
         withTimeoutOrNull(timeoutMillis) {
             suspendCancellableCoroutine { cont ->
                 val pending = linkedSetOf<String>().apply { addAll(interestingServices) }
@@ -115,6 +120,11 @@ class HostnameResolver(context: Context) {
                 val lock = Any()
                 var stopped = false
                 var completed = false
+                // API 34+ resolve callbacks registered but not answered yet.
+                // A resolve still pending when this pass ends (timeout, stop
+                // button, network change) would otherwise stay registered in
+                // the system service and keep this resolver alive.
+                val pendingResolves = CopyOnWriteArrayList<NsdManager.ServiceInfoCallback>()
 
                 fun stopAll() {
                     val snapshot = synchronized(lock) {
@@ -130,6 +140,18 @@ class HostnameResolver(context: Context) {
                             manager.stopServiceDiscovery(listener)
                         } catch (_: Exception) {
                             // Already stopped or never registered: nothing to do.
+                        }
+                    }
+                    // Release the resolves that never delivered. Copy first:
+                    // an answer arriving concurrently removes itself from the
+                    // list and must not see it half-cleared.
+                    val resolving = pendingResolves.toList()
+                    pendingResolves.clear()
+                    resolving.forEach { callback ->
+                        try {
+                            manager.unregisterServiceInfoCallback(callback)
+                        } catch (_: Exception) {
+                            // Never registered or already released.
                         }
                     }
                 }
@@ -160,11 +182,15 @@ class HostnameResolver(context: Context) {
                         override fun onDiscoveryStarted(serviceType: String?) { /* no-op */ }
 
                         override fun onServiceFound(info: NsdServiceInfo) {
+                            // A found event can still arrive just after
+                            // stopAll(); registering a resolve then would
+                            // leave it registered with nobody to release it.
+                            if (synchronized(lock) { stopped }) return
                             // Resolve each found service to get its host IP + name.
-                            resolveService(info) { resolvedIp, friendlyName ->
+                            resolveService(info, pendingResolves) { resolvedIp, friendlyName ->
                                 if (resolvedIp != null && friendlyName != null) {
                                     mdnsCache[resolvedIp] = friendlyName
-                                    synchronized(discovered) { discovered[resolvedIp] = friendlyName }
+                                    discovered[resolvedIp] = friendlyName
                                 }
                             }
                         }
@@ -207,6 +233,8 @@ class HostnameResolver(context: Context) {
      */
     private fun resolveService(
         info: NsdServiceInfo,
+        /** Collects API 34+ callbacks so the caller can release them. */
+        pendingResolves: MutableList<NsdManager.ServiceInfoCallback>?,
         onResolved: (ip: String?, name: String?) -> Unit,
     ) {
         val manager = nsdManager ?: run {
@@ -214,10 +242,11 @@ class HostnameResolver(context: Context) {
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val callback = OneShotServiceInfoCallback(manager, onResolved)
+            val callback = OneShotServiceInfoCallback(manager, onResolved, pendingResolves)
             try {
                 // Direct executor: callbacks arrive on the system's handler
                 // thread — exactly where the legacy ResolveListener ran.
+                pendingResolves?.add(callback)
                 manager.registerServiceInfoCallback(info, Executor { it.run() }, callback)
             } catch (_: Exception) {
                 callback.onRegistrationAborted()
@@ -259,6 +288,8 @@ class HostnameResolver(context: Context) {
     private inner class OneShotServiceInfoCallback(
         private val manager: NsdManager,
         private val onResolved: (ip: String?, name: String?) -> Unit,
+        /** Registration list owned by the discovery pass; null outside one. */
+        private val pendingResolves: MutableList<NsdManager.ServiceInfoCallback>?,
     ) : NsdManager.ServiceInfoCallback {
         private val delivered = AtomicBoolean(false)
 
@@ -277,7 +308,8 @@ class HostnameResolver(context: Context) {
 
         override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
             // The system already dropped the registration, so there is nothing
-            // to unregister: just report "could not resolve".
+            // to unregister — only to stop tracking it.
+            pendingResolves?.remove(this)
             if (delivered.compareAndSet(false, true)) onResolved(null, null)
         }
 
@@ -287,10 +319,12 @@ class HostnameResolver(context: Context) {
 
         /** Registration never reached the system (synchronous failure). */
         fun onRegistrationAborted() {
+            pendingResolves?.remove(this)
             if (delivered.compareAndSet(false, true)) onResolved(null, null)
         }
 
         private fun unregisterQuietly() {
+            pendingResolves?.remove(this)
             try {
                 manager.unregisterServiceInfoCallback(this)
             } catch (_: Exception) {
