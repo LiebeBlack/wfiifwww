@@ -187,18 +187,20 @@ class SsdpDiscovery(context: Context) {
      * True when [location] is an `http://` URL pointing at a private IPv4
      * address. This is what keeps the cleartext request inside the LAN.
      */
-    private fun isLocalDescriptionUrl(location: String): Boolean = try {
-        val url = URL(location)
-        if (!url.protocol.equals("http", ignoreCase = true)) return false
-        val value = LocalNetworkInfo.ipv4ToInt(url.host) ?: return false
-        val first = (value shr 24) and 0xFF
-        val second = (value shr 16) and 0xFF
-        first == 10L ||
-            (first == 100L && second in 64L..127L) ||
-            (first == 172L && second in 16L..31L) ||
-            (first == 192L && second == 168L)
-    } catch (_: Exception) {
-        false
+    private fun isLocalDescriptionUrl(location: String): Boolean {
+        return try {
+            val url = URL(location)
+            if (!url.protocol.equals("http", ignoreCase = true)) return false
+            val value = LocalNetworkInfo.ipv4ToInt(url.host) ?: return false
+            val first = (value shr 24) and 0xFF
+            val second = (value shr 16) and 0xFF
+            first == 10L ||
+                (first == 100L && second in 64L..127L) ||
+                (first == 172L && second in 16L..31L) ||
+                (first == 192L && second == 168L)
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /** GETs and parses one description document; null on any failure. */
