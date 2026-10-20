@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Escáner Wi-Fi</string>
+    <string name="app_name">IWF</string>
     <string name="app_version">1.0</string>
 
     <!-- Permission rationale strings shown before the system dialog. -->
@@ -128,6 +128,8 @@
     <string name="field_vendor">Fabricante</string>
     <string name="field_model">Modelo</string>
     <string name="field_type">Tipo de dispositivo</string>
+    <string name="field_role">Función en la red</string>
+    <string name="field_role_router">Router / puerta de enlace predeterminada</string>
     <string name="device_open_web">Abrir su panel web</string>
     <string name="device_open_web_hint">Se abrirá en el navegador la dirección http://%1$s de este dispositivo.</string>
     <string name="browser_unavailable">No hay ningún navegador disponible en este dispositivo.</string>
@@ -240,7 +242,11 @@
     <string name="settings_data">Datos</string>
     <string name="settings_share_desc">Exporte los resultados actuales en CSV: una línea por dispositivo, con dirección, marca, servicios y método de detección.</string>
     <string name="settings_share">Compartir el último análisis en CSV</string>
-    <string name="settings_about">Acerca de</string>
+    <string name="settings_about">Acerca de IWF</string>
+    <string name="settings_about_desc">IWF es una aplicación para analizar la red Wi-Fi local desde tu propio móvil: descubre los dispositivos conectados, identifica su marca, nombre y tipo, y permite etiquetarlos por ubicación física.</string>
+    <string name="settings_about_how">Para ello combina ocho métodos de detección independientes — tabla ARP, SSDP/UPnP, WS-Discovery, mDNS, NetBIOS, sondeo ICMP/TCP, NsdManager y DNS inverso — y cruza sus evidencias para clasificar cada equipo, empezando por el propio router de la red.</string>
+    <string name="settings_about_features">Funciones: marca del fabricante sin conexión (prefijo OUI), etiquetas de ubicación guardadas en el dispositivo, buscador, varios criterios de ordenación, agrupación por tipo y exportación de los resultados en CSV.</string>
+    <string name="settings_about_tech">Desarrollada en Kotlin con Jetpack Compose y Material 3. Todo el análisis se ejecuta en el propio dispositivo: sin servidores, sin cuentas y sin envío de datos.</string>
     <string name="settings_version">Versión %1$s</string>
     <string name="settings_privacy">Todo el análisis ocurre en este dispositivo. No se suben resultados, direcciones ni etiquetas.</string>
 </resources>

@@ -259,6 +259,54 @@ class ProtocolAndClassificationTest {
     }
 
     @Test
+    fun `the gateway is the router even when it announces nothing`() {
+        // Measured from the default route: no UPnP, no ports, no name needed.
+        assertEquals(DeviceKind.Router, DeviceKind.classify(isSelf = false, isGateway = true))
+        assertEquals(
+            DeviceKind.Router,
+            DeviceKind.classify(isSelf = false, isGateway = true, openPorts = setOf(80)),
+        )
+        // A phone acting as a hotspot is both the gateway and this device.
+        assertEquals(DeviceKind.Self, DeviceKind.classify(isSelf = true, isGateway = true))
+    }
+
+    @Test
+    fun `a web panel alone never means router, but panel plus router evidence does`() {
+        // Half the LAN serves a page on 80/8080: unknown stays unknown.
+        assertEquals(
+            DeviceKind.Unknown,
+            DeviceKind.classify(isSelf = false, openPorts = setOf(80, 8080)),
+        )
+        // Devices whose panel belongs to their real category keep it.
+        assertEquals(
+            DeviceKind.Nas,
+            DeviceKind.classify(isSelf = false, vendor = "Synology", openPorts = setOf(80)),
+        )
+        assertEquals(
+            DeviceKind.Camera,
+            DeviceKind.classify(isSelf = false, hostname = "ipcam-salon", openPorts = setOf(80)),
+        )
+        // Web panel + router brand/name -> router.
+        assertEquals(
+            DeviceKind.Router,
+            DeviceKind.classify(isSelf = false, vendor = "TP-Link Technologies", openPorts = setOf(80)),
+        )
+        assertEquals(
+            DeviceKind.Router,
+            DeviceKind.classify(isSelf = false, hostname = "openwrt-casa", openPorts = setOf(80)),
+        )
+    }
+
+    @Test
+    fun `computers are recognized from their machine names`() {
+        assertEquals(DeviceKind.Computer, DeviceKind.classify(isSelf = false, hostname = "DESKTOP-ABC123"))
+        assertEquals(DeviceKind.Computer, DeviceKind.classify(isSelf = false, hostname = "WIN-X9Z"))
+        assertEquals(DeviceKind.Computer, DeviceKind.classify(isSelf = false, hostname = "JOHN-PC"))
+        assertEquals(DeviceKind.Computer, DeviceKind.classify(isSelf = false, hostname = "ubuntu-sala"))
+        assertEquals(DeviceKind.Computer, DeviceKind.classify(isSelf = false, hostname = "macbook-de-lucia"))
+    }
+
+    @Test
     fun `device exposes derived kind and display name`() {
         val printer = NetworkDevice(
             ip = "192.168.1.30",

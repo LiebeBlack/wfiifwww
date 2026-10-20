@@ -92,6 +92,9 @@ class NetworkScanner(context: Context) {
         // ---- Environment ---------------------------------------------------
         val subnet = runCatching { LocalNetworkInfo.detect(appContext) }.getOrNull()
         val selfIp = subnet?.let { s -> runCatching { LocalNetworkInfo.selfIp(s) }.getOrNull() }
+        // The default gateway: the one device whose role is certain, so the
+        // classifier can name it router instead of guessing from open ports.
+        val gatewayIp = runCatching { LocalNetworkInfo.gatewayAddress(appContext) }.getOrNull()
         // Exactly the addresses that will be probed: 1..254 on a /24.
         val hostCount = subnet?.let { s -> s.hostAddresses().count() } ?: 0
         val arp = runCatching { ArpTableReader.readWithStatus() }
@@ -126,6 +129,9 @@ class NetworkScanner(context: Context) {
                 hostname = base.hostname ?: hostname,
                 vendor = vendor ?: base.vendor,
                 isSelf = base.isSelf || ip == selfIp,
+                // Every discovery path funnels through here, so the gateway
+                // IP is tagged exactly once no matter which method found it.
+                isGateway = base.isGateway || ip == gatewayIp,
                 sources = if (source != null) base.sources + source else base.sources,
                 services = (base.services + listOfNotNull(service) + services.orEmpty()).distinct(),
                 openPorts = base.openPorts + ports.orEmpty(),

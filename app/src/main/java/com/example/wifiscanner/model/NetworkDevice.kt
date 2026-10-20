@@ -22,6 +22,9 @@ package com.example.wifiscanner.model
  *                  [DeviceKind.classify].
  * @param models    Human-readable model strings advertised over mDNS
  *                  ("model=Chromecast Ultra"), when a device exposes them.
+ * @param isGateway True when this address is the LAN's default gateway — the
+ *                  host that routes the subnet, i.e. the router. Set by the
+ *                  scanner from the link's default route, never guessed.
  */
 data class NetworkDevice(
     val ip: String,
@@ -34,6 +37,7 @@ data class NetworkDevice(
     val services: List<String> = emptyList(),
     val openPorts: Set<Int> = emptySet(),
     val models: List<String> = emptyList(),
+    val isGateway: Boolean = false,
 ) {
     /** Stable identity for list diffs: prefer MAC (survives DHCP changes). */
     val stableId: String get() = mac ?: ip
@@ -49,10 +53,13 @@ data class NetworkDevice(
             openPorts = openPorts,
             hostname = hostname,
             vendor = vendor,
+            isGateway = isGateway,
         )
 
     /**
      * Best display name we have: hostname, then model, then the raw address.
+     * A computer therefore shows its machine name ("DESKTOP-ABC") and a
+     * printer its advertised service name, exactly as the OS lists them.
      */
     val displayName: String get() = hostname ?: models.firstOrNull() ?: ip
 }

@@ -12,7 +12,10 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.wifiscanner"
+        // Application identity of the shipped package. The Kotlin/R package
+        // (namespace) stays `com.example.wifiscanner`; only the installed
+        // package name follows the product brand.
+        applicationId = "com.iwf.LBs"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

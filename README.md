@@ -1,8 +1,18 @@
-# Wi-Fi LAN Scanner
+# IWF — Wi-Fi LAN Scanner
 
-A lightweight, fully offline Android app that scans the current Wi-Fi subnet,
-discovers active devices (IP, MAC, hostname, manufacturer) and lets you tag
-each device with a physical location label ("Living Room", "Office", ...).
+**IWF** is a lightweight, fully offline Android app that scans the current Wi-Fi
+subnet, discovers active devices (IP, MAC, hostname, manufacturer) and lets you
+tag each device with a physical location label ("Living Room", "Office", ...).
+
+The software is written entirely in Kotlin on top of Jetpack Compose
+(Material 3), with Room for the small amount of local persistence it needs.
+Everything — sockets, multicast protocols, subnet arithmetic, the OUI table
+and the classifier — runs on the device: there is no backend, no account and
+no telemetry. Discovery deliberately avoids depending on any single Android
+capability, because each OS release locks a little more down.
+
+Installed as `com.iwf.LBs` (the package it is shipped under); the
+Kotlin namespace stays `com.example.wifiscanner`.
 
 ## Features
 
@@ -29,7 +39,12 @@ each device with a physical location label ("Living Room", "Office", ...).
   8. **Reverse DNS** for the hosts that still have no name.
 - **Device classification** — services, open ports and names are fused into a
   device type (router, printer, camera, speaker, TV, cast, NAS, phone,
-  computer, smart device) used for icons and sorting.
+  computer, smart device) used for icons and sorting. The router is identified
+  first from the subnet's default gateway (measured, not guessed), then from
+  its UPnP class, and only then from "web admin panel + router name/brand" —
+  so a camera or NAS with its own web page is never promoted to router, while
+  Windows and Unix desktops are recognized as computers from their machine
+  names (`DESKTOP-…`, `WIN-…`, `ubuntu-…`) and shown under their own name.
 - **Offline vendor lookup** — a bundled, sorted OUI prefix table
   (`app/src/main/assets/oui.csv`, ~1500 common vendors) binary-searched in
   memory. No network calls, no big database.
@@ -96,7 +111,7 @@ all with nothing discovered. Everything else degrades to a note.
   requested at runtime through `PermissionGate` with rationale +
   settings fallback on API 29+.
 - `NEARBY_WIFI_DEVICES` (`neverForLocation`) — Android 13+ non-location
-  Wi-Fi APIs; `POST_NOTIFICATIONS` declared for future background-scan use.
+  Wi-Fi APIs; declared at install time only.
 
 ## Building
 

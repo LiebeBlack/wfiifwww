@@ -100,6 +100,46 @@ object LocalNetworkInfo {
             ?: viaAnyLanInterface()
             ?: viaDhcpInfo(context)
 
+    /**
+     * IPv4 address of the default gateway (the router of this LAN), or null.
+     *
+     * Read from the link's default route — authoritative even on a static IP,
+     * Ethernet or a VPN underneath — and falling back to the DHCP lease, which
+     * is where every consumer AP writes it. The address matters beyond the
+     * Network screen: the host that owns the route *is* the router, so the
+     * scanner uses it to classify that device without guessing from ports.
+     */
+    fun gatewayAddress(context: Context): String? {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val fromLink = if (cm == null) {
+            null
+        } else try {
+            val wifi = cm.allNetworks.firstOrNull { network ->
+                cm.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+            val link = (wifi ?: cm.activeNetwork)?.let { network -> cm.getLinkProperties(network) }
+            link?.routes
+                ?.firstOrNull { route -> route.isDefaultRoute }
+                ?.gateway?.hostAddress
+                ?.takeIf { address -> ipv4ToInt(address) != null && address != "0.0.0.0" }
+        } catch (_: Exception) {
+            null
+        }
+        if (fromLink != null) return fromLink
+
+        return try {
+            @Suppress("DEPRECATION")
+            val dhcp = (context.applicationContext
+                .getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+                ?.dhcpInfo
+            if (dhcp == null || dhcp.gateway == 0) return null
+            littleEndianIntToIpv4(dhcp.gateway).takeIf { it != "0.0.0.0" }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /** Strategy 1: real Wi-Fi interface enumeration (works on hotspot too). */
     private fun viaWifiInterface(): Subnet? = try {
         wifiInterfaces().firstNotNullOfOrNull { iface -> subnetOf(iface) }

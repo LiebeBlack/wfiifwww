@@ -58,7 +58,7 @@ fun DeviceKind.displayName(): String = when (this) {
     DeviceKind.MediaPlayer -> "Reproductor multimedia"
     DeviceKind.Nas -> "NAS / almacenamiento"
     DeviceKind.Phone -> "Móvil / tablet"
-    DeviceKind.Computer -> "Ordenador"
+    DeviceKind.Computer -> "Computadora"
     DeviceKind.Iot -> "Dispositivo inteligente"
     DeviceKind.Unknown -> "Dispositivo no identificado"
 }
@@ -87,7 +87,7 @@ fun NetworkStatistics.Transport.displayName(): String = when (this) {
  */
 fun serviceLabel(raw: String): String = when (raw.trim()) {
     // WS-Discovery classes.
-    "Computer" -> "Ordenador"
+    "Computer" -> "Computadora"
     "Printer" -> "Impresora"
     "Scanner" -> "Escáner"
     "Camera" -> "Cámara"

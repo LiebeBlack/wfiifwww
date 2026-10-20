@@ -176,6 +176,13 @@ fun DeviceDetailSheet(
                         value = hostname,
                         onCopy = ::copy,
                     )
+                } ?: run {
+                    // A computer keeps its row even without a name: "sin
+                    // nombre de equipo" is the honest answer, not a gap.
+                    InfoRow(
+                        label = stringResource(R.string.field_hostname),
+                        value = stringResource(R.string.no_hostname),
+                    )
                 }
                 device.vendor?.let { vendor ->
                     CopyRow(
@@ -196,6 +203,15 @@ fun DeviceDetailSheet(
                     value = kind.displayName(),
                     onCopy = ::copy,
                 )
+                if (device.isGateway) {
+                    // The gateway is the router: state it as a role instead of
+                    // leaving the user to infer it from the type label.
+                    CopyRow(
+                        label = stringResource(R.string.field_role),
+                        value = stringResource(R.string.field_role_router),
+                        onCopy = ::copy,
+                    )
+                }
                 device.location?.let { location ->
                     CopyRow(
                         label = stringResource(R.string.field_location),
