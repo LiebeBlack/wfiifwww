@@ -12,7 +12,8 @@ package com.example.wifiscanner.model
  *             on Android 10+, so it is never required.
  *  - [Icmp] — the host answered a system `ping` probe.
  *  - [Tcp]  — the host accepted a TCP connection on one of the common LAN
- *             service ports (brute-force port sweep). *  - [Ssdp]    — the host answered an SSDP/UPnP M-SEARCH (multicast).
+ *             service ports (brute-force port sweep).
+ *  - [Ssdp]    — the host answered an SSDP/UPnP M-SEARCH (multicast).
  *  - [Wsd]     — the host answered a WS-Discovery Probe: the protocol Windows
  *                itself uses for "Network" in the Explorer.
  *  - [Mdns]    — a DNS-SD/mDNS query was answered by this address.

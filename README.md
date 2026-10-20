@@ -91,6 +91,12 @@ JDK 17 and Android SDK 35.
 
 CLI (with a local Gradle 8.9+ or Android Studio's bundled one):
 
+> **Note:** the wrapper binaries (`gradlew`, `gradlew.bat`,
+> `gradle/wrapper/gradle-wrapper.jar`) are not committed. Android Studio
+> regenerates them on first sync, and the GitHub Actions release workflow
+> bootstraps them automatically from `gradle/wrapper/gradle-wrapper.properties`
+> before every build.
+
 ```bash
 ./gradlew :app:assembleDebug   # build the APK
 ./gradlew :app:testDebugUnitTest  # run JVM unit tests (ARP parsing, OUI, subnet math)

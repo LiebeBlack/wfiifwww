@@ -1,6 +1,11 @@
 *.iml
 .gradle
 /local.properties
+
+# Release signing material — never committed (only the .example template is).
+app/release.properties
+*.jks
+*.keystore
 /.idea
 .DS_Store
 /build

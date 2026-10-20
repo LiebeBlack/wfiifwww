@@ -10,6 +10,12 @@ env:
   JAVA_VERSION: "17"
   GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
 
+# The tagged build publishes a GitHub Release with the APK attached; creating
+# a release requires write access to repository contents (the default token
+# is read-only on new repositories).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -63,9 +69,30 @@ jobs:
           restore-keys: |
             github-run-
 
-      # Build the release APK. If app/release.properties is present (signing
-      # secrets were configured above) the APK will be signed; otherwise it
-      # will be unsigned but still a real release build.
+      # Optional signing: when the keystore secrets are configured, materialize
+      # them into app/release.properties + keystore.jks (both git-ignored) so
+      # assembleRelease signs the APK. With no secrets the build still succeeds
+      # and produces a genuine unsigned release APK (minify + shrink enabled).
+      - name: Configure release signing (optional)
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_RELEASE_KEYSTORE_BASE64" ]; then
+            echo "No keystore secret configured — building an unsigned release APK."
+            exit 0
+          fi
+          echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > keystore.jks
+          {
+            echo "storeFile=../keystore.jks"
+            echo "storePassword=$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_RELEASE_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_RELEASE_KEY_PASSWORD"
+          } > app/release.properties
+          echo "Release signing configured from repository secrets."
+
       - name: Build release APK
         id: build
         run: |

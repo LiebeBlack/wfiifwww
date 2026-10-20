@@ -310,7 +310,7 @@ class WsDiscovery(context: Context) {
                 joined.contains("media") -> "Media player"
                 joined.contains("computer") || joined.contains("workstation") -> "Computer"
                 joined.contains("nas") || joined.contains("storage") -> "NAS"
-                joined.contains("device") -> "Device"
+                // Generic "wsdp:Device"/"Device" alone identifies nothing -> null.
                 else -> null
             }
         }

@@ -58,8 +58,9 @@ enum class DeviceKind(val label: String) {
                 mentions("internetgatewaydevice", "wandevice", "wanconnectiondevice", "ipbridge") ->
                     Router
 
-                // Printers are the easiest to spot: dedicated RAW/IPP ports.
-                open(9100, 9101, 515) || mentions("_ipp", "_printer", "_pdl-datastream", "printerserver") ->
+                // Printers are the easiest to spot: RAW/IPP ports, or a name/service hint
+                open(9100, 9101, 515) ||
+                    mentions("_ipp", "_printer", "_pdl-datastream", "printerserver", "printer", "scanner") ->
                     Printer
 
                 // Cameras: RTSP / ONVIF.

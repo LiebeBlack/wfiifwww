@@ -1,4 +1,4 @@
-param([string]$WorkingDirectory = $PSScriptRoot)
+param([string]$WorkingDirectory = (Split-Path -Parent $PSScriptRoot))
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
