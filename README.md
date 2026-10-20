@@ -35,24 +35,39 @@ each device with a physical location label ("Living Room", "Office", ...).
   memory. No network calls, no big database.
 - **Location labels** — per-MAC labels persisted in Room and merged into the
   scan results reactively (saving a label updates the list instantly).
-- **Network statistics** — a collapsible card with everything the public
-  APIs expose: SSID and access point, band/channel from the frequency,
+- **Network section** — the Network screen shows everything the public
+  APIs expose, grouped into link / addressing / capabilities: SSID and
+  access point, band/channel from the frequency,
   negotiated link speeds (total and RX/TX), signal in dBm with a 0-4 level,
   IPv4 address/prefix, network and broadcast addresses, gateway, DNS, DHCP
   server and lease time, scannable host count, transport, metered flag, VPN
   presence and the platform-reported link bandwidth — plus the last scan's
   duration and device count.
-- **Results tooling** — live search across every field, four sort orders
-  (IP, name, type, brand), a per-method summary line, a device detail sheet
-  with per-field copy, and CSV export through the system share sheet.
-- **Modern UI** — Jetpack Compose + Material 3, dynamic color (Android 12+),
-  dark/light themes, live-filling `LazyColumn`.
+- **Sectioned UI** — four top-level screens (Overview, Devices, Network,
+  Settings) behind a bottom navigation bar, plus a dedicated full-screen
+  search screen and a device detail sheet. No search bar competes with the
+  scan results.
+- **Results tooling** — search across every field on its own screen, four sort
+  orders (IP, name, type, brand), one-tap type filters, optional grouping by
+  device type, a per-method distribution, a detail sheet with per-field copy,
+  and CSV export through the system share sheet.
+- **Dark-first design** — deep-navy surfaces, a mint action colour and custom
+  typography/shapes. Dark is the default; light and "follow system" live in
+  Settings, together with Android 12+ dynamic colour, default sort and list
+  grouping — all persisted across launches.
 
 ## Architecture (MVVM)
 
 ```
-ui/          Compose screens, theme, components, ScanViewModel, ScanUiState,
-             ScanExport (CSV), DeviceFormatting (sort/search helpers)
+ui/          AppSettings (persisted theme/sort/grouping), DeviceSort,
+             ScanViewModel, ScanUiState, ScanExport (CSV),
+             DeviceFormatting (sort/search helpers)
+ui/screens/  AppRoot (bottom-nav shell), Dashboard, Devices, Network,
+             Settings, Search
+ui/components/ DeviceCard, DeviceDetailSheet, NetworkHeroCard, StatTile,
+             LabeledBar, InfoCard, SectionHeader, NoteBanner, EmptyState,
+             PermissionGate, LocationEditDialog
+ui/theme/    ThemeMode + dark-first palette, typography and shapes
 net/         NetworkScanner (orchestrator), PingSweep (ICMP/TCP/priming),
              ArpTableReader, SsdpDiscovery, WsDiscovery (Windows discovery),
              MdnsDiscovery, NetBiosDiscovery, NetworkStatistics,

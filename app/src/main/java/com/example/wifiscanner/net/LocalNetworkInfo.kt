@@ -20,20 +20,28 @@ import java.net.NetworkInterface
  */
 object LocalNetworkInfo {
 
-    /** Whether the device currently has an active Wi-Fi connection. */
+    /**
+     * Whether the device currently has an active Wi-Fi connection.
+     *
+     * Checks **all** networks, not only the active one: when a VPN is up it
+     * becomes the active network, while the Wi-Fi link underneath stays fully
+     * connected. Looking only at `activeNetwork` made the app believe it was
+     * offline and refuse to scan.
+     */
+    @Suppress("DEPRECATION")
     fun isOnWifi(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
-        @Suppress("DEPRECATION")
         val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-        // Modern path: check NetworkCapabilities for Wi-Fi.
-        cm.activeNetwork?.let { network ->
-            cm.getNetworkCapabilities(network)?.takeIf { caps ->
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-            }?.let { return true }
+        try {
+            val hasWifiNetwork = cm.allNetworks.any { network ->
+                cm.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+            if (hasWifiNetwork) return true
+        } catch (_: Exception) {
+            // Fall through to the legacy path below.
         }
-        // Fallback for older APIs / devices that expose Wi-Fi via WifiManager.
-        @Suppress("DEPRECATION")
         return wifiManager?.isWifiEnabled == true &&
             cm.activeNetworkInfo?.type == ConnectivityManager.TYPE_WIFI
     }
@@ -109,7 +117,19 @@ object LocalNetworkInfo {
         return try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                 ?: return null
-            val properties = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
+            // Prefer the Wi-Fi network's own link properties: with a VPN the
+            // active network is the tunnel and its address is not the LAN.
+            val wifiProperties = cm.allNetworks.firstNotNullOfOrNull { network ->
+                val caps = cm.getNetworkCapabilities(network)
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                    cm.getLinkProperties(network)
+                } else {
+                    null
+                }
+            }
+            val properties = wifiProperties
+                ?: cm.activeNetwork?.let { cm.getLinkProperties(it) }
+                ?: return null
             val link = properties.linkAddresses.firstOrNull { candidate ->
                 val addr = candidate.address
                 addr is Inet4Address && !addr.isLoopbackAddress && isPrivateIpv4(addr.hostAddress)

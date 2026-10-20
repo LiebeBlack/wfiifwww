@@ -96,53 +96,95 @@ class HostnameResolver(context: Context) {
         val discovered = HashMap<String, String>(16)
         withTimeoutOrNull(timeoutMillis) {
             suspendCancellableCoroutine { cont ->
-                val pending = interestingServices.toMutableSet()
+                val pending = linkedSetOf<String>().apply { addAll(interestingServices) }
+                if (pending.isEmpty()) {
+                    cont.resume(Unit)
+                    return@suspendCancellableCoroutine
+                }
 
-                if (pending.isEmpty()) { cont.resume(Unit); return@suspendCancellableCoroutine }
+                // One listener per service type: NsdManager refuses to reuse a
+                // single listener for several discoveries ("listener already
+                // in use"). Sharing one listener used to leave every type but
+                // the first permanently deaf.
+                val listeners = LinkedHashMap<String, NsdManager.DiscoveryListener>(pending.size)
+                val lock = Any()
+                var stopped = false
+                var completed = false
 
-                val listener = object : NsdManager.DiscoveryListener {
-                    override fun onDiscoveryStarted(serviceType: String?) { /* no-op */ }
-
-                    override fun onServiceFound(info: NsdServiceInfo) {
-                        // Resolve each found service to get its host IP + name.
-                        resolveService(info) { resolvedIp, friendlyName ->
-                            if (resolvedIp != null && friendlyName != null) {
-                                mdnsCache[resolvedIp] = friendlyName
-                                synchronized(discovered) { discovered[resolvedIp] = friendlyName }
-                            }
+                fun stopAll() {
+                    val snapshot = synchronized(lock) {
+                        if (stopped) {
+                            emptyList()
+                        } else {
+                            stopped = true
+                            listeners.values.toList()
                         }
                     }
-
-                    override fun onServiceLost(info: NsdServiceInfo) { /* cache keeps last-known */ }
-
-                    override fun onDiscoveryStopped(serviceType: String?) = finishType(serviceType)
-
-                    override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) = finishType(serviceType)
-                    override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) = finishType(serviceType)
-
-                    private fun finishType(serviceType: String?) {
-                        synchronized(pending) {
-                            pending.remove(serviceType)
-                            if (pending.isEmpty() && cont.isActive) cont.resume(Unit)
+                    snapshot.forEach { listener ->
+                        try {
+                            manager.stopServiceDiscovery(listener)
+                        } catch (_: Exception) {
+                            // Already stopped or never registered: nothing to do.
                         }
                     }
                 }
 
-                // Kick off one discovery per service type.
+                /** Claims completion exactly once, then releases every listener. */
+                fun completeIfDone() {
+                    val shouldComplete = synchronized(lock) {
+                        if (completed || pending.isNotEmpty()) {
+                            false
+                        } else {
+                            completed = true
+                            true
+                        }
+                    }
+                    if (!shouldComplete) return
+                    stopAll()
+                    if (cont.isActive) cont.resume(Unit)
+                }
+
+                fun finish(type: String?) {
+                    val key = type ?: return
+                    synchronized(lock) { pending.remove(key) }
+                    completeIfDone()
+                }
+
                 for (type in interestingServices) {
+                    val listener = object : NsdManager.DiscoveryListener {
+                        override fun onDiscoveryStarted(serviceType: String?) { /* no-op */ }
+
+                        override fun onServiceFound(info: NsdServiceInfo) {
+                            // Resolve each found service to get its host IP + name.
+                            resolveService(info) { resolvedIp, friendlyName ->
+                                if (resolvedIp != null && friendlyName != null) {
+                                    mdnsCache[resolvedIp] = friendlyName
+                                    synchronized(discovered) { discovered[resolvedIp] = friendlyName }
+                                }
+                            }
+                        }
+
+                        override fun onServiceLost(info: NsdServiceInfo) { /* cache keeps last-known */ }
+
+                        override fun onDiscoveryStopped(serviceType: String?) = finish(type)
+
+                        override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) =
+                            finish(type)
+
+                        override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) =
+                            finish(type)
+                    }
+                    synchronized(lock) { listeners[type] = listener }
                     try {
                         manager.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener)
                     } catch (_: Exception) {
-                        synchronized(pending) {
-                            pending.remove(type)
-                            if (pending.isEmpty() && cont.isActive) cont.resume(Unit)
-                        }
+                        finish(type)
                     }
                 }
 
-                cont.invokeOnCancellation {
-                    try { manager.stopServiceDiscovery(listener) } catch (_: Exception) {}
-                }
+                // Timeout/cancellation (stop button, network change): release
+                // every registration so no discovery outlives the scan.
+                cont.invokeOnCancellation { stopAll() }
             }
         }
         return discovered

@@ -1,94 +1,220 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Wi-Fi LAN Scanner</string>
+    <string name="app_name">Escáner Wi-Fi</string>
+    <string name="app_version">1.0</string>
 
     <!-- Permission rationale strings shown before the system dialog. -->
-    <string name="permission_rationale_title">Location needed</string>
-    <string name="permission_rationale_body">Android requires the Location permission to list nearby Wi-Fi networks and identify your subnet. Location data never leaves your device — nothing is uploaded.</string>
-    <string name="permission_denied_title">Permission denied</string>
-    <string name="permission_denied_body">Scanning needs the Location permission. You can grant it from system settings.</string>
-    <string name="grant_permission">Grant permission</string>
+    <string name="permission_rationale_title">Necesitamos tu ubicación</string>
+    <string name="permission_rationale_body">Android exige el permiso de ubicación para leer el nombre de la red Wi-Fi y tu dirección IP local. La ubicación nunca sale del dispositivo: no se envía nada a ningún servidor.</string>
+    <string name="permission_denied_title">Permiso denegado</string>
+    <string name="permission_denied_body">El escaneo necesita el permiso de ubicación. Puedes concederlo desde los ajustes del sistema.</string>
+    <string name="permission_location_off_title">Activa la ubicación</string>
+    <string name="permission_location_off_body">El permiso está concedido, pero la ubicación del sistema está desactivada. Android oculta el nombre de la red (SSID) mientras siga apagada.</string>
+    <string name="grant_permission">Conceder permiso</string>
+    <string name="open_app_settings">Abrir ajustes de la app</string>
+    <string name="open_location_settings">Abrir ajustes de ubicación</string>
+
+    <!-- Sections / navigation. -->
+    <string name="section_overview">Resumen</string>
+    <string name="section_devices">Dispositivos</string>
+    <string name="section_network">Red</string>
+    <string name="section_settings">Ajustes</string>
 
     <!-- Scanner status / actions. -->
-    <string name="scan">Scan</string>
-    <string name="scanning">Scanning…</string>
-    <string name="stop">Stop</string>
-    <string name="devices_found">%1$d devices found</string>
-    <string name="no_devices">No devices found yet. Tap Scan to discover devices on your network.</string>
-    <string name="not_on_wifi">Not connected to Wi-Fi. Connect to a network and try again.</string>
-    <string name="scan_error">Scan failed: %1$s</string>
-    <string name="retry">Retry</string>
+    <string name="scan">Escanear</string>
+    <string name="scanning">Analizando la red…</string>
+    <string name="stop">Detener</string>
+    <plurals name="devices_found">
+        <item quantity="one">%1$d dispositivo</item>
+        <item quantity="other">%1$d dispositivos</item>
+    </plurals>
+    <string name="no_devices">Todavía no hay dispositivos. Toca Escanear para descubrir lo que hay conectado a tu red.</string>
+    <string name="not_on_wifi">No estás conectado a una red Wi-Fi. Conéctate e inténtalo de nuevo.</string>
+    <string name="scan_error">El escaneo falló: %1$s</string>
+    <string name="retry">Reintentar</string>
+
+    <!-- Overview. -->
+    <string name="dashboard_connected">Red conectada</string>
+    <string name="dashboard_no_network">Sin red Wi-Fi</string>
+    <string name="dashboard_wifi_off">Wi-Fi desactivado</string>
+    <string name="dashboard_wifi_disconnected">Wi-Fi sin conexión</string>
+    <string name="dashboard_ssid_hidden">Red oculta</string>
+    <string name="dashboard_ssid_hidden_hint">Activa la ubicación para ver el nombre de la red.</string>
+    <string name="dashboard_scan_now">Escanear la red</string>
+    <string name="dashboard_stop">Detener escaneo</string>
+    <string name="dashboard_last_scan">análisis de %1$s</string>
+    <string name="dashboard_devices">Dispositivos</string>
+    <string name="dashboard_types">Tipos</string>
+    <string name="dashboard_methods">Métodos</string>
+    <string name="dashboard_types_title">Dispositivos por tipo</string>
+    <string name="dashboard_other_types">+%1$d más en otros tipos</string>
+    <string name="dashboard_recent_title">Encontrados hace poco</string>
+    <plurals name="dashboard_see_all">
+        <item quantity="one">Ver el dispositivo</item>
+        <item quantity="other">Ver los %1$d</item>
+    </plurals>
+    <string name="dashboard_link_title">Enlace actual</string>
+    <string name="dashboard_open_network">Abrir los detalles de la red</string>
+    <string name="dashboard_idle_hint">Inicia un análisis para mapear cada dispositivo de esta red.</string>
+    <string name="dashboard_empty_title">Todavía no hay nada mapeado</string>
+    <string name="dashboard_signal">Señal</string>
+    <string name="dashboard_band">Banda</string>
+    <string name="dashboard_speed">Velocidad</string>
+
+    <!-- Devices section. -->
+    <plurals name="devices_count">
+        <item quantity="one">%1$d dispositivo</item>
+        <item quantity="other">%1$d dispositivos</item>
+    </plurals>
+    <string name="devices_filter_all">Todos</string>
+    <string name="devices_empty_title">Aún no hay dispositivos</string>
+    <string name="devices_no_filter_title">Sin dispositivos de este tipo</string>
+    <string name="scan_failed_title">El escaneo falló</string>
+    <string name="devices_no_filter_match">No hay ningún dispositivo de tipo «%1$s» en esta red.</string>
+
+    <!-- Search screen (the app has no inline search bar). -->
+    <string name="search_open">Buscar dispositivos</string>
+    <string name="search_close">Cerrar la búsqueda</string>
+    <string name="search_hint">Nombre, IP, MAC, marca…</string>
+    <string name="search_desc">Busca por nombre, IP, MAC, marca, tipo, servicios y puertos.</string>
+    <plurals name="search_count">
+        <item quantity="one">%1$d de %2$d dispositivo</item>
+        <item quantity="other">%1$d de %2$d dispositivos</item>
+    </plurals>
+    <string name="search_prompt">Escribe para filtrar los dispositivos encontrados en esta red.</string>
+    <string name="search_empty_title">Sin coincidencias</string>
+    <string name="search_no_devices">Nada que buscar todavía</string>
+    <string name="clear_search">Borrar la búsqueda</string>
+    <string name="no_matches">Ningún dispositivo coincide con tu búsqueda.</string>
 
     <!-- Device card fields. -->
-    <string name="label_location">Location</string>
-    <string name="set_location">Set location</string>
-    <string name="edit_location">Edit location</string>
-    <string name="location_hint">e.g. Living Room, Office, Bedroom</string>
-    <string name="save">Save</string>
-    <string name="cancel">Cancel</string>
-    <string name="delete">Delete</string>
-    <string name="unknown_vendor">Unknown vendor</string>
-    <string name="no_hostname">No hostname</string>
-    <string name="own_device">This device</string>
-    <!-- Shown instead of the location button when no method recovered a MAC;
+    <string name="label_location">Ubicación</string>
+    <string name="set_location">Añadir ubicación</string>
+    <string name="edit_location">Editar ubicación</string>
+    <string name="location_hint">p. ej. Salón, Oficina, Dormitorio</string>
+    <string name="save">Guardar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="delete">Eliminar</string>
+    <string name="unknown_vendor">Fabricante desconocido</string>
+    <string name="no_hostname">Sin nombre de equipo</string>
+    <string name="own_device">Este dispositivo</string>
+    <!-- Shown instead of the location pill when no method recovered a MAC;
          labels are MAC-keyed, so saving would silently do nothing. -->
-    <string name="no_mac_hint">No MAC address found, so a location label cannot be saved for this device.</string>
+    <string name="no_mac_hint">No se encontró la MAC, así que no se puede guardar una ubicación para este dispositivo.</string>
 
     <!-- Degraded-discovery banner (a method was blocked, results still shown). -->
-    <string name="limited_detection">Limited detection</string>
-    <string name="detected_via">detected via %1$s</string>
+    <string name="limited_detection">Detección limitada</string>
+    <string name="detected_via">detectado por %1$s</string>
 
     <!-- Result list controls. -->
-    <string name="search_hint">Search name, IP, MAC, brand…</string>
-    <string name="clear_search">Clear search</string>
-    <string name="no_matches">No devices match your search.</string>
-    <string name="sort">Sort</string>
-    <string name="sort_ip">IP address</string>
-    <string name="sort_name">Name</string>
-    <string name="sort_kind">Device type</string>
-    <string name="sort_vendor">Brand</string>
-    <string name="export">Share results</string>
+    <string name="sort">Ordenar</string>
+    <string name="sort_ip">Dirección IP</string>
+    <string name="sort_name">Nombre</string>
+    <string name="sort_kind">Tipo de dispositivo</string>
+    <string name="sort_vendor">Marca</string>
+    <string name="export">Compartir resultados</string>
 
     <!-- Device detail sheet. -->
-    <string name="field_ip">IP address</string>
-    <string name="field_mac">MAC address</string>
-    <string name="field_hostname">Hostname</string>
-    <string name="field_vendor">Brand</string>
-    <string name="field_model">Model</string>
-    <string name="field_location">Location</string>
-    <string name="field_services">Services</string>
-    <string name="field_ports">Open ports</string>
-    <string name="field_sources">Detected via</string>
-    <string name="copy">Copy</string>
-    <string name="copied_to_clipboard">Copied to clipboard</string>
+    <string name="field_identity">Identidad</string>
+    <string name="field_evidence">Evidencias</string>
+    <string name="field_ip">Dirección IP</string>
+    <string name="field_mac">Dirección MAC</string>
+    <string name="field_hostname">Nombre de equipo</string>
+    <string name="field_vendor">Fabricante</string>
+    <string name="field_model">Modelo</string>
+    <string name="field_location">Ubicación</string>
+    <string name="field_services">Servicios</string>
+    <string name="field_ports">Puertos abiertos</string>
+    <string name="field_sources">Detectado por</string>
+    <string name="copy">Copiar</string>
+    <string name="copied_to_clipboard">Copiado al portapapeles</string>
 
-    <!-- Network / Wi-Fi statistics card. -->
-    <string name="stats_title">Network details</string>
-    <string name="stats_expand">Expand</string>
-    <string name="stats_collapse">Collapse</string>
-    <string name="stats_no_wifi">No Wi-Fi connection</string>
-    <string name="stat_scan_time">Scan time</string>
-    <string name="stat_devices">Devices found</string>
-    <string name="stat_connection">Connection</string>
-    <string name="stat_metered">Metered</string>
-    <string name="stat_wifi_enabled">Wi-Fi enabled</string>
-    <string name="stat_ssid">Network (SSID)</string>
-    <string name="stat_bssid">Access point</string>
-    <string name="stat_band_channel">Band</string>
-    <string name="stat_channel">channel %1$d</string>
-    <string name="stat_link_speed">Link speed</string>
-    <string name="stat_rx_tx">RX / TX</string>
-    <string name="stat_signal">Signal</string>
-    <string name="stat_ip">IP address</string>
-    <string name="stat_network">Network</string>
-    <string name="stat_broadcast">Broadcast</string>
-    <string name="stat_gateway">Gateway</string>
+    <!-- Network section. -->
+    <string name="network_wifi_link">Enlace Wi-Fi</string>
+    <string name="network_ipv4">Configuración IPv4</string>
+    <string name="network_capabilities">Capacidades</string>
+    <string name="network_discovery">Métodos de detección</string>
+    <string name="network_refresh">Actualizar los datos de la red</string>
+    <string name="network_no_wifi">Conéctate a una red Wi-Fi para ver los detalles del enlace.</string>
+    <string name="network_unavailable">No disponible en esta red.</string>
+    <string name="network_loading">Leyendo los datos de la red…</string>
+    <string name="network_wifi_off_hint">Activa el Wi-Fi del dispositivo para ver los detalles del enlace.</string>
+    <string name="network_ssid_hidden_title">Android oculta el nombre de la red</string>
+    <string name="network_ssid_hidden_body">El SSID solo se muestra con el permiso de ubicación concedido y la ubicación del sistema activa. La dirección IP y el resto de datos siguen siendo correctos.</string>
+    <string name="network_grant_location">Conceder permiso</string>
+    <string name="network_enable_location">Activar ubicación</string>
+    <string name="network_discovery_empty">Ejecuta un análisis para ver qué métodos encontraron dispositivos.</string>
+    <plurals name="network_devices_seen">
+        <item quantity="one">%1$d dispositivo</item>
+        <item quantity="other">%1$d dispositivos</item>
+    </plurals>
+
+    <string name="stat_ssid">Red (SSID)</string>
+    <string name="stat_bssid">Punto de acceso</string>
+    <string name="stat_connection">Conexión</string>
+    <string name="stat_metered">Conexión medida</string>
+    <string name="stat_wifi_enabled">Wi-Fi activado</string>
+    <string name="stat_band_channel">Banda</string>
+    <string name="stat_channel">canal %1$d</string>
+    <string name="stat_frequency">Frecuencia</string>
+    <string name="stat_link_speed">Velocidad del enlace</string>
+    <string name="stat_rx_tx">Recepción / envío</string>
+    <string name="stat_signal">Señal</string>
+    <string name="stat_signal_quality">Calidad</string>
+    <string name="stat_ip">Dirección IP</string>
+    <string name="stat_prefix">Prefijo</string>
+    <string name="stat_network">Red</string>
+    <string name="stat_broadcast">Difusión</string>
+    <string name="stat_gateway">Puerta de enlace</string>
     <string name="stat_dns">DNS</string>
-    <string name="stat_dhcp">DHCP server</string>
-    <string name="stat_lease">Lease</string>
-    <string name="stat_hosts">Scannable hosts</string>
-    <string name="stat_bandwidth">Link bandwidth</string>
-    <string name="stat_vpn">VPN active</string>
-    <string name="value_yes">Yes</string>
+    <string name="stat_dhcp">Servidor DHCP</string>
+    <string name="stat_lease">Concesión DHCP</string>
+    <string name="stat_hosts">Equipos analizables</string>
+    <string name="stat_bandwidth">Ancho de banda</string>
+    <string name="stat_vpn">VPN activa</string>
+    <string name="value_yes">Sí</string>
     <string name="value_no">No</string>
+
+    <!-- Link transport names. -->
+    <string name="transport_wifi">Wi-Fi</string>
+    <string name="transport_cellular">Datos móviles</string>
+    <string name="transport_ethernet">Ethernet</string>
+    <string name="transport_vpn">VPN</string>
+    <string name="transport_bluetooth">Bluetooth</string>
+    <string name="transport_other">Otra red</string>
+
+    <!-- Signal quality buckets. -->
+    <string name="quality_excellent">Excelente</string>
+    <string name="quality_good">Buena</string>
+    <string name="quality_fair">Regular</string>
+    <string name="quality_weak">Débil</string>
+    <string name="quality_poor">Muy débil</string>
+
+    <!-- Settings section. -->
+    <string name="settings_appearance">Apariencia</string>
+    <string name="settings_theme_system">Seguir al sistema</string>
+    <string name="settings_theme_system_desc">Usa el modo claro u oscuro del teléfono.</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_light_desc">Interfaz luminosa y de alto contraste.</string>
+    <string name="settings_theme_dark">Oscuro</string>
+    <string name="settings_theme_dark_desc">Superficies azul marino, más cómodas de noche.</string>
+    <string name="settings_dynamic">Usar los colores del sistema</string>
+    <string name="settings_dynamic_desc">Toma la paleta del fondo de pantalla (Android 12+) en lugar del tema menta de la app.</string>
+    <string name="settings_list">Lista de resultados</string>
+    <string name="settings_group_by_kind">Agrupar por tipo de dispositivo</string>
+    <string name="settings_group_by_kind_desc">Muestra un encabezado por cada tipo encontrado.</string>
+    <string name="settings_default_sort">Orden predeterminado</string>
+    <string name="settings_permissions">Permisos</string>
+    <string name="settings_permission_location">Permiso de ubicación</string>
+    <string name="settings_location_services">Ubicación del sistema</string>
+    <string name="settings_permission_granted">Concedido</string>
+    <string name="settings_permission_denied">Denegado</string>
+    <string name="settings_permissions_desc">Android necesita ambos para mostrar el nombre real de la red Wi-Fi. El análisis de la red local funciona aunque la ubicación esté desactivada.</string>
+    <string name="settings_open">Abrir</string>
+    <string name="settings_data">Datos</string>
+    <string name="settings_share_desc">Exporta los resultados actuales en CSV: una línea por dispositivo, con dirección, marca, servicios y cómo se encontró.</string>
+    <string name="settings_share">Compartir el último análisis en CSV</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_version">Versión %1$s</string>
+    <string name="settings_privacy">Todo el análisis ocurre en este dispositivo. No se suben resultados, direcciones ni etiquetas.</string>
 </resources>

@@ -1,6 +1,7 @@
 package com.example.wifiscanner.net
 
 import android.content.Context
+import android.net.wifi.WifiManager
 import com.example.wifiscanner.model.DiscoverySource
 import com.example.wifiscanner.model.NetworkDevice
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +122,7 @@ class NetworkScanner(context: Context) {
             )
         }
 
-        publish(phase = "Preparing…")
+        publish(phase = "Preparando…")
 
         if (subnet == null) notes += NOTE_NO_SUBNET
         if (arp is ArpTableReader.ArpReadResult.Unavailable) notes += NOTE_NO_ARP
@@ -133,7 +134,7 @@ class NetworkScanner(context: Context) {
                 merge(ip = ip, source = DiscoverySource.Arp, mac = entry.mac)
             }
         }
-        publish(phase = "Reading neighbour table…")
+        publish(phase = "Leyendo la tabla de vecinos…")
 
         // ---- Phases 2-4: multicast + active sweep, in parallel --------------
         var ssdpResults: Map<String, SsdpDiscovery.SsdpResponse> = emptyMap()
@@ -150,7 +151,7 @@ class NetworkScanner(context: Context) {
             val netbiosJob = async(Dispatchers.IO) { safeNetbios(subnet) }
 
             if (subnet != null) {
-                publish(phase = "Probing ${subnet.networkAddress}/${subnet.prefixLength}…")
+                publish(phase = "Sondeando ${subnet.networkAddress}/${subnet.prefixLength}…")
                 // The sweep callback fires from worker coroutines, so results
                 // are collected thread-safely and merged afterwards.
                 val alive = ConcurrentHashMap<String, PingSweep.HostResult>()
@@ -158,9 +159,9 @@ class NetworkScanner(context: Context) {
                 for (host in alive.values) {
                     merge(ip = host.ip, source = host.source, ports = host.openPorts)
                 }
-                publish(phase = "Fingerprinting open ports…")
+                publish(phase = "Identificando puertos abiertos…")
             } else {
-                publish(phase = "Looking for announcements…")
+                publish(phase = "Buscando anuncios de red…")
             }
 
             // Await the parallel jobs here; the flow itself stays single-coroutine.
@@ -177,19 +178,19 @@ class NetworkScanner(context: Context) {
         for ((ip, response) in ssdpResults) {
             merge(ip = ip, source = DiscoverySource.Ssdp, service = response.kind)
         }
-        publish(phase = "SSDP/UPnP announcements…")
+        publish(phase = "Anuncios SSDP/UPnP…")
 
         // ---- Phase 6: WS-Discovery (the Windows "Network" view) -------------
         for ((ip, response) in wsdResults) {
             merge(ip = ip, source = DiscoverySource.Wsd, service = response.kind)
         }
-        publish(phase = "WS-Discovery devices…")
+        publish(phase = "Dispositivos WS-Discovery…")
 
         // ---- Phase 7: mDNS / DNS-SD service names ---------------------------
         for ((ip, name) in mdnsNames) {
             merge(ip = ip, source = DiscoverySource.Mdns, hostname = name)
         }
-        publish(phase = "mDNS service names…")
+        publish(phase = "Nombres de servicio mDNS…")
 
         // ---- Phase 8: raw mDNS answers (service types, names, models) --------
         for ((ip, answer) in mdnsAnswers) {
@@ -201,7 +202,7 @@ class NetworkScanner(context: Context) {
                 models = answer.models,
             )
         }
-        publish(phase = "mDNS services…")
+        publish(phase = "Servicios mDNS…")
 
         // ---- Phase 9: NetBIOS answers (machine name, MAC without ARP) -------
         for ((ip, result) in netbiosResults) {
@@ -213,12 +214,12 @@ class NetworkScanner(context: Context) {
                 mac = if (alreadyHasMac) null else result.mac,
             )
         }
-        publish(phase = "NetBIOS names…")
+        publish(phase = "Nombres NetBIOS…")
 
         // ---- Phase 10: reverse DNS for hosts that still have no name --------
         val unnamed = devices.values.filter { it.hostname == null && !it.isSelf }
         if (unnamed.isNotEmpty()) {
-            publish(phase = "Resolving ${unnamed.size} names…")
+            publish(phase = "Resolviendo ${unnamed.size} nombres…")
             coroutineScope {
                 val lookups = unnamed.map { device ->
                     async(Dispatchers.IO) { device.ip to safeRdns(device.ip) }
@@ -237,11 +238,19 @@ class NetworkScanner(context: Context) {
             devices[ip] = device.copy(vendor = vendor)
         }
 
-        publish(phase = "Done")
+        publish(phase = "Listo")
 
-        // ---- The only hard stop: no Wi-Fi and nothing found at all ----------
-        if (devices.isEmpty() && !runCatching { LocalNetworkInfo.isOnWifi(appContext) }.getOrDefault(false)) {
-            throw ScanException(if (subnet == null) ScanError.NotOnWifi else ScanError.WifiOff)
+        // ---- The only hard stop: nothing found and no Wi-Fi ----------------
+        // Note that a missing subnet is *not* a reason to fail: multicast-only
+        // discovery is a legitimate degraded mode. The error is chosen from
+        // the actual Wi-Fi state, not from subnet detection.
+        if (devices.isEmpty()) {
+            val wifiEnabled = runCatching {
+                (appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.isWifiEnabled
+            }.getOrNull()
+            val onWifi = runCatching { LocalNetworkInfo.isOnWifi(appContext) }.getOrDefault(false)
+            if (wifiEnabled == false) throw ScanException(ScanError.WifiOff)
+            if (!onWifi) throw ScanException(ScanError.NotOnWifi)
         }
     }.flowOn(Dispatchers.IO)
 
@@ -318,11 +327,13 @@ class NetworkScanner(context: Context) {
 
     companion object {
         private const val NOTE_NO_SUBNET =
-            "Could not determine the local subnet, so the address sweep was skipped; " +
-                "devices were looked up through multicast announcements (SSDP/mDNS) instead."
+            "No se pudo determinar la subred local, así que se omitió el barrido de " +
+                "direcciones; los dispositivos se buscaron mediante anuncios multicast " +
+                "(SSDP/mDNS)."
 
         private const val NOTE_NO_ARP =
-            "This Android version hides the ARP table, so MAC addresses and vendors may be " +
-                "missing. Devices are still detected through ICMP, TCP, SSDP and mDNS."
+            "Esta versión de Android oculta la tabla ARP, por lo que pueden faltar " +
+                "direcciones MAC y fabricantes. Los dispositivos se siguen detectando por " +
+                "ICMP, TCP, SSDP y mDNS."
     }
 }

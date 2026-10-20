@@ -1,16 +1,22 @@
 package com.example.wifiscanner.ui.components
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material3.Button
@@ -24,49 +30,67 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.example.wifiscanner.R
+import com.example.wifiscanner.ui.SystemSettings
 
 /**
- * The permissions a LAN scan needs, in request order.
+ * The only runtime permission the scanner needs.
  *
- * Android gates Wi-Fi scan results behind the location permission, so the
- * scanner cannot work without it. On API 33+ we additionally declare
- * NEARBY_WIFI_DEVICES (neverForLocation) so the platform doesn't force the
- * location prompt for non-location Wi-Fi APIs.
+ * Android gates Wi-Fi connection info (SSID/BSSID) and DHCP details behind
+ * `ACCESS_FINE_LOCATION`, so it is required. `NEARBY_WIFI_DEVICES` is *not*
+ * requested: the app does not use Wi-Fi Aware/RTT, and asking for an extra
+ * permission that can be denied only made the gate fail unnecessarily on
+ * Android 13+.
  */
 fun requiredRuntimePermissions(): Array<String> =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.NEARBY_WIFI_DEVICES,
-        )
-    } else {
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    }
+    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
 
-/**
- * True when all runtime scanner permissions are granted.
- */
-fun hasScannerPermissions(context: android.content.Context): Boolean =
+/** True when every runtime scanner permission is granted. */
+fun hasScannerPermissions(context: Context): Boolean =
     requiredRuntimePermissions().all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
 
 /**
+ * Whether the system location switch is on. Needed in addition to the
+ * permission: with location off, Android returns `<unknown ssid>` and the app
+ * cannot show the network name.
+ */
+@Suppress("DEPRECATION")
+fun isLocationServicesEnabled(context: Context): Boolean {
+    val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        ?: return false
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            manager.isLocationEnabled
+        } else {
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
  * Wraps [content] with runtime permission handling for the scanner.
  *
  * - If permissions are granted, [content] renders normally.
- * - Otherwise a rationale screen is shown with a button that launches the
- *   system permission flow; on grant, [content] appears immediately
- *   (state-driven recomposition, no manual refresh).
+ * - Otherwise a rationale screen is shown; the button launches the system
+ *   permission flow once, then becomes a shortcut to the app settings page
+ *   (Android does not show the dialog again after a permanent denial).
+ * - The rationale also mentions the location switch, because granting the
+ *   permission alone is not enough for the SSID.
  *
- * @param onPermissionResult optional callback with the final grant state
- *                            (useful for triggering an auto-scan on grant).
+ * @param onPermissionResult optional callback with the final grant state.
  */
 @Composable
 fun PermissionGate(
@@ -88,6 +112,15 @@ fun PermissionGate(
         onPermissionResult?.invoke(granted)
     }
 
+    // Re-check on every return to the foreground: the user may have granted
+    // the permission in system settings while this screen was in the back
+    // stack, and showing the denial screen afterwards would be a dead end.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        val nowGranted = hasScannerPermissions(context)
+        granted = nowGranted
+        if (nowGranted) showRationale = false
+    }
+
     if (granted) {
         content()
         return
@@ -100,21 +133,31 @@ fun PermissionGate(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = Icons.Filled.LocationOff,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocationOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp),
+            )
+        }
+        Spacer(Modifier.height(20.dp))
         Text(
             text = stringResource(
                 if (showRationale) R.string.permission_denied_title
                 else R.string.permission_rationale_title
             ),
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             text = stringResource(
                 if (showRationale) R.string.permission_denied_body
@@ -124,22 +167,26 @@ fun PermissionGate(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(26.dp))
         Button(onClick = {
             if (showRationale) {
-                // Denied at least once: send the user to app settings where
-                // they can grant the permission manually.
-                context.startActivity(
-                    android.content.Intent(
-                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        android.net.Uri.fromParts("package", context.packageName, null),
-                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
+                SystemSettings.openAppSettings(context)
             } else {
                 launcher.launch(requiredRuntimePermissions())
             }
         }) {
-            Text(stringResource(R.string.grant_permission))
+            Text(
+                stringResource(
+                    if (showRationale) R.string.open_app_settings else R.string.grant_permission
+                )
+            )
         }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text = stringResource(R.string.settings_privacy),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+        )
     }
 }

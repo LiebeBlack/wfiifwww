@@ -9,8 +9,10 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Monitor connectivity state to know when we're on Wi-Fi. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Changelog: change Wi-Fi state (used to toggle the scan-friendly multicast lock). -->
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Required for WifiManager.MulticastLock: without it the Wi-Fi driver
+         filters multicast frames and SSDP, WS-Discovery and mDNS hear nothing.
+         This is a normal permission, granted at install time. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- ===================== Location ===================== -->
     <!-- Android gates all Wi-Fi scan results behind location permission.
@@ -19,16 +21,10 @@
     <!-- Coarse is implied by FINE but declared explicitly for clarity on API 31+. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- ===================== Android 13+ runtime notification permission (optional UX) =========== -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- We never *require* BLE; NEARBY_WIFI_DEVICES with neverForLocation keeps
-         Android 13+ happy if we later add Wi-Fi Aware/Rtt. Declared with
-         maxSdkVersion so older devices use the location path only. -->
-    <uses-permission
-        android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation"
-        tools:targetApi="33" />
+    <!-- NEARBY_WIFI_DEVICES is intentionally NOT declared: the scanner reads
+         connection info and DHCP leases, which are gated by location, and it
+         does not use Wi-Fi Aware/RTT. Asking for it at runtime only added a
+         permission that could be denied and block the scanner for no reason. -->
 
     <application
         android:name=".WifiScannerApp"

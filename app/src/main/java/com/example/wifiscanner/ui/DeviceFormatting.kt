@@ -1,6 +1,9 @@
 package com.example.wifiscanner.ui
 
+import com.example.wifiscanner.model.DeviceKind
+import com.example.wifiscanner.model.DiscoverySource
 import com.example.wifiscanner.model.NetworkDevice
+import com.example.wifiscanner.net.NetworkStatistics
 
 /**
  * Small, pure presentation helpers shared by the list, the detail sheet and
@@ -28,9 +31,75 @@ internal fun NetworkDevice.matchesQuery(query: String): Boolean {
         hostname?.let { append(it.lowercase()).append(' ') }
         location?.let { append(it.lowercase()).append(' ') }
         append(kind.label.lowercase()).append(' ')
+        // The UI shows Spanish type names, so searching them must work too.
+        append(kind.displayName().lowercase()).append(' ')
         services.forEach { append(it.lowercase()).append(' ') }
         models.forEach { append(it.lowercase()).append(' ') }
         openPorts.forEach { append(it).append(' ') }
     }
     return haystack.contains(needle)
+}
+
+/**
+ * Spanish name of an inferred device type, for every surface that shows it.
+ *
+ * Kept in the presentation layer on purpose: [DeviceKind.label] stays the
+ * stable, locale-independent identifier used by the CSV export and the tests.
+ */
+fun DeviceKind.displayName(): String = when (this) {
+    DeviceKind.Self -> "Este dispositivo"
+    DeviceKind.Router -> "Router / puerta de enlace"
+    DeviceKind.Printer -> "Impresora"
+    DeviceKind.Camera -> "Cámara"
+    DeviceKind.Speaker -> "Altavoz"
+    DeviceKind.Tv -> "Televisor"
+    DeviceKind.MediaPlayer -> "Reproductor multimedia"
+    DeviceKind.Nas -> "NAS / almacenamiento"
+    DeviceKind.Phone -> "Móvil / tablet"
+    DeviceKind.Computer -> "Ordenador"
+    DeviceKind.Iot -> "Dispositivo inteligente"
+    DeviceKind.Unknown -> "Dispositivo no identificado"
+}
+
+/** Spanish label for a discovery method; protocol names stay as they are. */
+fun DiscoverySource.displayLabel(): String = when (this) {
+    DiscoverySource.Self -> "este dispositivo"
+    else -> label
+}
+
+/** Spanish name of the transport carrying LAN traffic. */
+fun NetworkStatistics.Transport.displayName(): String = when (this) {
+    NetworkStatistics.Transport.Wifi -> "Wi-Fi"
+    NetworkStatistics.Transport.Cellular -> "Datos móviles"
+    NetworkStatistics.Transport.Ethernet -> "Ethernet"
+    NetworkStatistics.Transport.Vpn -> "VPN"
+    NetworkStatistics.Transport.Bluetooth -> "Bluetooth"
+    NetworkStatistics.Transport.Other -> "Otra red"
+}
+
+/**
+ * Spanish label for the few human-readable service classes that WS-Discovery
+ * and SSDP return ("Computer", "Media player", ...). Protocol identifiers
+ * such as `_googlecast._tcp` or `InternetGatewayDevice` stay untouched: they
+ * are evidence, not prose.
+ */
+fun serviceLabel(raw: String): String = when (raw.trim()) {
+    "Computer" -> "Ordenador"
+    "Printer" -> "Impresora"
+    "Scanner" -> "Escáner"
+    "Camera" -> "Cámara"
+    "Media player" -> "Reproductor multimedia"
+    "Phone" -> "Teléfono"
+    "Storage" -> "Almacenamiento"
+    else -> raw
+}
+
+/** Short quality word for a 0..4 signal bucket. */
+fun signalQuality(level: Int?): String? = when (level) {
+    null -> null
+    4 -> "Excelente"
+    3 -> "Buena"
+    2 -> "Regular"
+    1 -> "Débil"
+    else -> "Muy débil"
 }

@@ -35,11 +35,11 @@ object ScanExport {
                 device.mac.orEmpty(),
                 device.vendor.orEmpty(),
                 device.hostname.orEmpty(),
-                device.kind.label,
+                device.kind.displayName(),
                 device.location.orEmpty(),
                 device.services.joinToString(" "),
                 device.openPorts.sorted().joinToString(" "),
-                DiscoverySource.labels(device.sources),
+                DiscoverySource.ordered(device.sources).joinToString(" · ") { it.displayLabel() },
             )
             rows.add(fields.joinToString(",") { escape(it) })
         }
@@ -51,10 +51,13 @@ object ScanExport {
         if (devices.isEmpty()) return
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Wi-Fi LAN scan: ${devices.size} devices")
+            putExtra(
+                Intent.EXTRA_SUBJECT,
+                "Análisis de la red Wi-Fi: ${devices.size} dispositivos",
+            )
             putExtra(Intent.EXTRA_TEXT, buildCsv(devices))
         }
-        val chooser = Intent.createChooser(intent, "Share scan results")
+        val chooser = Intent.createChooser(intent, "Compartir los resultados")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(chooser)
     }
