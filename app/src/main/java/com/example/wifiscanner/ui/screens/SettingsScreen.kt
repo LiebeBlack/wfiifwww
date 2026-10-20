@@ -397,10 +397,11 @@ private fun PermissionRow(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-            )                Text(
-                    text = stringResource(
-                        if (granted) R.string.settings_permission_granted else offLabelRes
-                    ),
+            )
+            Text(
+                text = stringResource(
+                    if (granted) R.string.settings_permission_granted else offLabelRes
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (granted) {
                     MaterialTheme.colorScheme.primary
