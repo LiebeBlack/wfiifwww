@@ -29,13 +29,12 @@ object LocalNetworkInfo {
      * connected. Looking only at `activeNetwork` made the app believe it was
      * offline and refuse to scan.
      */
-    @Suppress("DEPRECATION")
     fun isOnWifi(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
         val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as? WifiManager
         try {
-            val hasWifiNetwork = cm.allNetworks.any { network ->
+            val hasWifiNetwork = cm.getAllNetworks().any { network ->
                 cm.getNetworkCapabilities(network)
                     ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             }
@@ -114,7 +113,7 @@ object LocalNetworkInfo {
         val fromLink = if (cm == null) {
             null
         } else try {
-            val wifi = cm.allNetworks.firstOrNull { network ->
+            val wifi = cm.getAllNetworks().firstOrNull { network ->
                 cm.getNetworkCapabilities(network)
                     ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             }
@@ -172,7 +171,7 @@ object LocalNetworkInfo {
                 ?: return null
             // Prefer the Wi-Fi network's own link properties: with a VPN the
             // active network is the tunnel and its address is not the LAN.
-            val wifiProperties = cm.allNetworks.firstNotNullOfOrNull { network ->
+            val wifiProperties = cm.getAllNetworks().firstNotNullOfOrNull { network ->
                 val caps = cm.getNetworkCapabilities(network)
                 if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
                     cm.getLinkProperties(network)

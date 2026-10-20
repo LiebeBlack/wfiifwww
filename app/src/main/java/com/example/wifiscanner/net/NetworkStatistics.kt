@@ -360,7 +360,7 @@ object NetworkStatistics {
                 // whatever order the platform reports (a VPN may be active
                 // while the Wi-Fi link underneath is the one we want).
                 val active = cm.activeNetwork
-                val networks = cm.allNetworks.toList()
+                val networks = cm.getAllNetworks().toList()
                 val ordered = ArrayList<android.net.Network>(networks.size + 1)
                 active?.let { ordered.add(it) }
                 ordered.addAll(networks.filter { it != active })
@@ -423,7 +423,7 @@ object NetworkStatistics {
         } else {
             val activeNetwork = cm.activeNetwork
             val activeCaps = activeNetwork?.let { cm.getNetworkCapabilities(it) }
-            val allNetworks = cm.allNetworks.toList()
+            val allNetworks = cm.getAllNetworks().toList()
             val allCaps = allNetworks.mapNotNull { network -> cm.getNetworkCapabilities(network) }
             val wifiNetwork = allNetworks.firstOrNull { network ->
                 cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
