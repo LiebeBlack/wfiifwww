@@ -15,7 +15,9 @@ enum class DeviceSort(@StringRes val labelRes: Int) {
     Ip(R.string.sort_ip),
     Name(R.string.sort_name),
     Kind(R.string.sort_kind),
-    Vendor(R.string.sort_vendor);
+    Vendor(R.string.sort_vendor),
+    Services(R.string.sort_services),
+    Mac(R.string.sort_mac);
 
     /** Applies this sort order to [devices]. */
     fun apply(devices: List<NetworkDevice>): List<NetworkDevice> = when (this) {
@@ -26,6 +28,18 @@ enum class DeviceSort(@StringRes val labelRes: Int) {
         Vendor -> devices.sortedWith(
             compareBy(
                 { (it.vendor ?: it.models.firstOrNull() ?: "~").lowercase() },
+                { it.displayName.lowercase() },
+            )
+        )
+        Services -> devices.sortedWith(
+            compareBy(
+                { it.services.size },
+                { it.displayName.lowercase() },
+            )
+        ).reversed() // Most services first
+        Mac -> devices.sortedWith(
+            compareBy(
+                { it.mac ?: "zzzzzzzzzzzz" },
                 { it.displayName.lowercase() },
             )
         )

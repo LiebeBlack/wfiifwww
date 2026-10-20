@@ -155,6 +155,21 @@ enum class DeviceKind(val label: String) {
                 mentions("_homekit", "_hap", "_matter", "esphome", "tasmota", "shelly", "sonoff", "tuya", "hue") ->
                     Iot
 
+                // Smart bulbs and lights
+                mentions("light", "bulb", "led", "yeelight", "lifx", "philips hue") -> Iot
+
+                // Smart plugs and switches
+                mentions("plug", "switch", "socket", "relay") -> Iot
+
+                // Gaming consoles
+                mentions("playstation", "ps4", "ps5", "xbox", "nintendo", "switch") -> Tv
+
+                // Wearables and accessories
+                mentions("watch", "band", "fitbit", "garmin", "airpods", "headphones") -> Phone
+
+                // Virtual machines and containers
+                mentions("vm", "virtual", "docker", "container", "k8s", "kubernetes") -> Computer
+
                 else -> Unknown
             }
         }

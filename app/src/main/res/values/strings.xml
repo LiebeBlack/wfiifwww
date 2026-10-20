@@ -21,6 +21,11 @@
     <string name="section_devices">Dispositivos</string>
     <string name="section_network">Red</string>
     <string name="section_settings">Ajustes</string>
+    <!-- Short versions for small tabs. -->
+    <string name="section_overview_short">Inicio</string>
+    <string name="section_devices_short">Disp.</string>
+    <string name="section_network_short">Red</string>
+    <string name="section_settings_short">Ajust.</string>
 
     <!-- Scanner status / actions. -->
     <string name="scan">Escanear</string>
@@ -97,10 +102,15 @@
     <string name="set_location">Añadir ubicación</string>
     <string name="edit_location">Editar ubicación</string>
     <string name="location_hint">p. ej. Salón, Oficina, Dormitorio</string>
+    <string name="label_nickname">Nombre personalizado</string>
+    <string name="set_nickname">Añadir nombre personalizado</string>
+    <string name="edit_nickname">Editar nombre personalizado</string>
+    <string name="nickname_hint">p. ej. Mi PC Principal, TV Sala</string>
     <string name="save">Guardar</string>
     <string name="cancel">Cancelar</string>
     <string name="delete">Eliminar</string>
     <string name="unknown_vendor">Fabricante desconocido</string>
+    <string name="unknown_model">Modelo no disponible</string>
     <string name="no_hostname">Sin nombre de equipo</string>
     <string name="own_device">Este dispositivo</string>
     <!-- Shown instead of the location pill when no method recovered a MAC;
@@ -117,6 +127,8 @@
     <string name="sort_name">Nombre</string>
     <string name="sort_kind">Tipo de dispositivo</string>
     <string name="sort_vendor">Marca</string>
+    <string name="sort_services">Servicios</string>
+    <string name="sort_mac">Dirección MAC</string>
     <string name="export">Compartir resultados</string>
 
     <!-- Device detail sheet. -->

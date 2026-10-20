@@ -19,9 +19,9 @@ interface DeviceLabelDao {
     @Query("SELECT * FROM device_labels")
     fun observeAll(): Flow<List<DeviceLabelEntity>>
 
-    /** One label by MAC (non-reactive, for one-shot merges). */
-    @Query("SELECT * FROM device_labels WHERE mac = :mac LIMIT 1")
-    suspend fun getByMac(mac: String): DeviceLabelEntity?
+    /** One label by key (MAC or IP, non-reactive, for one-shot merges). */
+    @Query("SELECT * FROM device_labels WHERE key = :key LIMIT 1")
+    suspend fun getByKey(key: String): DeviceLabelEntity?
 
     /**
      * Insert or replace a label. Saving an empty string deletes the row so
@@ -30,8 +30,8 @@ interface DeviceLabelDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(label: DeviceLabelEntity)
 
-    @Query("DELETE FROM device_labels WHERE mac = :mac")
-    suspend fun delete(mac: String)
+    @Query("DELETE FROM device_labels WHERE key = :key")
+    suspend fun delete(key: String)
 
     /** Remove labels not seen since [thresholdMillis] (periodic cleanup). */
     @Query("DELETE FROM device_labels WHERE lastSeen > 0 AND lastSeen < :thresholdMillis")

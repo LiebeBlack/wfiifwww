@@ -37,6 +37,7 @@ import com.example.wifiscanner.R
  * inside the content so the button row never overflows on a narrow screen.
  *
  * @param mac          identity of the labeled device (null for unknown).
+ * @param ip           IP address as fallback identifier.
  * @param initialLabel current label, or null when unset.
  * @param onSave       invoked with the trimmed new label ("" == delete).
  * @param onDismiss    invoked when the user cancels or dismisses.
@@ -50,7 +51,7 @@ fun LocationEditDialog(
     onDismiss: () -> Unit,
 ) {
     // Local edit state so Cancel truly discards changes.
-    var text by remember(mac, initialLabel) { mutableStateOf(initialLabel.orEmpty()) }
+    var text by remember(mac, ip, initialLabel) { mutableStateOf(initialLabel.orEmpty()) }
     val save = { onSave(text.trim()) }
 
     AlertDialog(
@@ -89,6 +90,98 @@ fun LocationEditDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (!initialLabel.isNullOrBlank()) {
+                    TextButton(
+                        onClick = { onSave("") },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = save) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
+/**
+ * Dialog for editing the custom nickname/apodo of a device.
+ *
+ * Shows the device's identity (IP/MAC) for context, a text field prefilled
+ * with the current nickname, Save (always enabled — clearing is allowed, which
+ * deletes the nickname), and Cancel (discards).
+ *
+ * @param mac            identity of the labeled device (null for unknown).
+ * @param ip             IP address for context.
+ * @param initialNickname current nickname, or null when unset.
+ * @param onSave         invoked with the trimmed new nickname ("" == delete).
+ * @param onDismiss      invoked when the user cancels or dismisses.
+ */
+@Composable
+fun NicknameEditDialog(
+    mac: String?,
+    ip: String,
+    initialNickname: String?,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // Local edit state so Cancel truly discards changes.
+    var text by remember(mac, ip, initialNickname) { mutableStateOf(initialNickname.orEmpty()) }
+    val save = { onSave(text.trim()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        title = {
+            Text(
+                stringResource(
+                    if (initialNickname.isNullOrBlank()) R.string.set_nickname
+                    else R.string.edit_nickname
+                )
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Context line so the user knows which device they're naming.
+                Text(
+                    text = buildString {
+                        append(ip)
+                        mac?.let { append("  •  "); append(it) }
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.label_nickname)) },
+                    placeholder = { Text(stringResource(R.string.nickname_hint)) },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!initialNickname.isNullOrBlank()) {
                     TextButton(
                         onClick = { onSave("") },
                         modifier = Modifier.fillMaxWidth(),

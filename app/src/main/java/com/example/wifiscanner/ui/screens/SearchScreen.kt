@@ -56,6 +56,7 @@ fun SearchScreen(
     onClose: () -> Unit,
     onOpenDevice: (NetworkDevice) -> Unit,
     onEditLocation: (NetworkDevice) -> Unit,
+    onEditNickname: (NetworkDevice) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -158,6 +159,7 @@ fun SearchScreen(
                         device = device,
                         onClick = { onOpenDevice(device) },
                         onEditLocation = { onEditLocation(device) },
+                        onEditNickname = { onEditNickname(device) },
                     )
                 }
             }

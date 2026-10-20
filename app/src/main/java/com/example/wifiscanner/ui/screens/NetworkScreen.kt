@@ -303,6 +303,39 @@ fun NetworkScreen(
 
         item { DiscoveryCard(devices) }
 
+        // Show top devices by service count
+        val topDevices = remember(devices) {
+            devices.sortedByDescending { it.services.size }.take(3)
+        }
+        if (topDevices.isNotEmpty() && topDevices.any { it.services.isNotEmpty() }) {
+            item {
+                InfoCard(
+                    title = "Dispositivos más activos",
+                    icon = Icons.Filled.WifiTethering,
+                ) {
+                    topDevices.forEach { device ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = device.displayName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = "${device.services.size} serv.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         item { Spacer(Modifier.height(4.dp)) }
     }
 }

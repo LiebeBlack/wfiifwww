@@ -60,8 +60,11 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
     /** Raw scan state; only mutated from [startScan]'s coroutine. */
     private val _scanState = MutableStateFlow<ScanUiState>(ScanUiState.Idle)
 
-    /** Reactive MAC -> label map from Room. */
+    /** Reactive key (MAC or IP) -> label map from Room. */
     private val labelMap = labelRepository.observeLabelMap()
+
+    /** Reactive key (MAC or IP) -> nickname map from Room. */
+    private val nicknameMap = labelRepository.observeNicknameMap()
 
     /** Last device list from the most recent emission (for live merge). */
     private val scanDevices = MutableStateFlow<List<NetworkDevice>>(emptyList())
@@ -162,13 +165,13 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * The single state stream the UI collects: scan state merged with the
-     * latest persisted labels. Saving a label recomposes the list instantly.
+     * latest persisted labels and nicknames. Saving a label or nickname recomposes the list instantly.
      */
-    val uiState: StateFlow<ScanUiState> = combine(_scanState, labelMap) { state, labels ->
+    val uiState: StateFlow<ScanUiState> = combine(_scanState, labelMap, nicknameMap) { state, labels, nicknames ->
         when (state) {
             is ScanUiState.Idle -> state
-            is ScanUiState.Loading -> state.copy(devices = state.devices.withLabels(labels))
-            is ScanUiState.Success -> state.copy(devices = state.devices.withLabels(labels))
+            is ScanUiState.Loading -> state.copy(devices = state.devices.withLabelsAndNicknames(labels, nicknames))
+            is ScanUiState.Success -> state.copy(devices = state.devices.withLabelsAndNicknames(labels, nicknames))
             is ScanUiState.Error -> state
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScanUiState.Idle)
@@ -323,19 +326,40 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Persists a location label for [mac]. Blank text deletes the label.
+     * Persists a location label for a device. Blank text deletes the label.
      * The reactive [labelMap] pushes the change back into [uiState].
      */
-    fun saveLocation(mac: String, label: String) {
-        viewModelScope.launch { labelRepository.saveLabel(mac, label) }
+    fun saveLocation(mac: String?, ip: String, label: String) {
+        viewModelScope.launch { labelRepository.saveLabel(mac, ip, label) }
     }
 
-    /** Applies the label map onto a scan result list (MAC-keyed merge). */
-    private fun List<NetworkDevice>.withLabels(labels: Map<String, String>): List<NetworkDevice> =
-        if (labels.isEmpty()) this
+    /**
+     * Persists a nickname/apodo for a device. Blank text deletes the nickname.
+     * The reactive [nicknameMap] pushes the change back into [uiState].
+     */
+    fun saveNickname(mac: String?, ip: String, nickname: String) {
+        viewModelScope.launch { labelRepository.saveNickname(mac, ip, nickname) }
+    }
+
+    /**
+     * Persists both location label and nickname for a device in one transaction.
+     */
+    fun saveLocationAndNickname(mac: String?, ip: String, label: String, nickname: String) {
+        viewModelScope.launch { labelRepository.saveLabelAndNickname(mac, ip, label, nickname) }
+    }
+
+    /** Applies the label and nickname maps onto a scan result list (MAC/IP-keyed merge). */
+    private fun List<NetworkDevice>.withLabelsAndNicknames(
+        labels: Map<String, String>,
+        nicknames: Map<String, String>
+    ): List<NetworkDevice> =
+        if (labels.isEmpty() && nicknames.isEmpty()) this
         else map { device ->
-            val mac = device.mac ?: return@map device
-            device.copy(location = labels[mac]?.takeIf { it.isNotBlank() } ?: device.location)
+            val key = device.mac ?: device.ip
+            device.copy(
+                location = labels[key]?.takeIf { it.isNotBlank() } ?: device.location,
+                nickname = nicknames[key]?.takeIf { it.isNotBlank() } ?: device.nickname
+            )
         }
 
     override fun onCleared() {

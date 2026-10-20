@@ -377,7 +377,10 @@ class SsdpDiscovery(context: Context) {
         internal fun parseDescription(xml: String): SsdpDescription? {
             if (xml.isBlank()) return null
             val manufacturer = tagValue(xml, "manufacturer")
-            val model = tagValue(xml, "modelName") ?: tagValue(xml, "modelNumber")
+            val model = tagValue(xml, "modelName")
+                ?: tagValue(xml, "modelNumber")
+                ?: tagValue(xml, "model")
+                ?: tagValue(xml, "modelDescription")
             val friendlyName = tagValue(xml, "friendlyName")
             if (manufacturer == null && model == null && friendlyName == null) return null
             return SsdpDescription(

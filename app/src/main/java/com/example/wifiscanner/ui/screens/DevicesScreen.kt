@@ -122,6 +122,15 @@ fun DevicesScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )
+            // Show additional context about current view
+            if (activeKind != null) {
+                Text(
+                    text = "· ${activeKind.displayName()}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Box {
                 TextButton(onClick = { sortMenuOpen = true }) {
                     Icon(

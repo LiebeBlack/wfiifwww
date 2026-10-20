@@ -30,6 +30,7 @@ internal fun NetworkDevice.matchesQuery(query: String): Boolean {
         vendor?.let { append(it.lowercase()).append(' ') }
         hostname?.let { append(it.lowercase()).append(' ') }
         location?.let { append(it.lowercase()).append(' ') }
+        nickname?.let { append(it.lowercase()).append(' ') }
         append(kind.label.lowercase()).append(' ')
         // The UI shows Spanish type names, so searching them must work too.
         append(kind.displayName().lowercase()).append(' ')

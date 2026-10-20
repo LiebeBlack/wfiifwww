@@ -61,11 +61,15 @@ import com.example.wifiscanner.ui.components.LocationEditDialog
  * Top-level sections of the app. Each one is a full screen; the bottom bar is
  * the only navigator, so the app never nests tabs inside tabs.
  */
-enum class AppSection(@StringRes val titleRes: Int, val icon: ImageVector) {
-    Overview(R.string.section_overview, Icons.Filled.Dashboard),
-    Devices(R.string.section_devices, Icons.Filled.DevicesOther),
-    Network(R.string.section_network, Icons.Filled.Wifi),
-    Settings(R.string.section_settings, Icons.Filled.Settings),
+enum class AppSection(
+    @StringRes val titleRes: Int,
+    @StringRes val shortTitleRes: Int,
+    val icon: ImageVector
+) {
+    Overview(R.string.section_overview, R.string.section_overview_short, Icons.Filled.Dashboard),
+    Devices(R.string.section_devices, R.string.section_devices_short, Icons.Filled.DevicesOther),
+    Network(R.string.section_network, R.string.section_network_short, Icons.Filled.Wifi),
+    Settings(R.string.section_settings, R.string.section_settings_short, Icons.Filled.Settings),
 }
 
 /**
@@ -96,6 +100,7 @@ fun AppRoot(
     val sectionStates = rememberSaveableStateHolder()
     var detailDevice by remember { mutableStateOf<NetworkDevice?>(null) }
     var editingDevice by remember { mutableStateOf<NetworkDevice?>(null) }
+    var editingNicknameDevice by remember { mutableStateOf<NetworkDevice?>(null) }
 
     // The bar doubles as a status line: the live scan phase while scanning and
     // the network name on the overview. No extra screen is needed for it.
@@ -148,6 +153,7 @@ fun AppRoot(
             onClose = { searchOpen = false },
             onOpenDevice = { detailDevice = it },
             onEditLocation = { editingDevice = it },
+            onEditNickname = { editingNicknameDevice = it },
         )
     } else {
         Scaffold(
@@ -219,7 +225,7 @@ fun AppRoot(
                                         contentDescription = null,
                                     )
                                 },
-                                label = { Text(stringResource(item.titleRes)) },
+                                label = { Text(stringResource(item.shortTitleRes)) },
                                 colors = NavigationBarItemDefaults.colors(
                                     indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                                     selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -239,7 +245,7 @@ fun AppRoot(
                 Crossfade(
                     targetState = section,
                     animationSpec = tween(durationMillis = 220),
-                    label = "seccion",
+                    label = "section",
                 ) { current ->
                     sectionStates.SaveableStateProvider(current.name) {
                         when (current) {
@@ -294,6 +300,10 @@ fun AppRoot(
                 editingDevice = device
                 detailDevice = null
             },
+            onEditNickname = {
+                editingNicknameDevice = device
+                detailDevice = null
+            },
         )
     }
 
@@ -304,10 +314,24 @@ fun AppRoot(
             ip = device.ip,
             initialLabel = device.location,
             onSave = { newLabel ->
-                device.mac?.let { viewModel.saveLocation(it, newLabel) }
+                viewModel.saveLocation(device.mac, device.ip, newLabel)
                 editingDevice = null
             },
             onDismiss = { editingDevice = null },
+        )
+    }
+
+    // ---- Nickname editor -----------------------------------------------
+    editingNicknameDevice?.let { device ->
+        NicknameEditDialog(
+            mac = device.mac,
+            ip = device.ip,
+            initialNickname = device.nickname,
+            onSave = { newNickname ->
+                viewModel.saveNickname(device.mac, device.ip, newNickname)
+                editingNicknameDevice = null
+            },
+            onDismiss = { editingNicknameDevice = null },
         )
     }
 }

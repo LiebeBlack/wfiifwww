@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOn
@@ -33,9 +34,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +55,7 @@ import com.example.wifiscanner.model.NetworkDevice
 import com.example.wifiscanner.ui.displayLabel
 import com.example.wifiscanner.ui.displayName
 import com.example.wifiscanner.ui.serviceLabel
+import kotlinx.coroutines.launch
 
 /**
  * Full picture of one discovered device, opened by tapping a card.
@@ -66,12 +70,14 @@ fun DeviceDetailSheet(
     device: NetworkDevice,
     onDismiss: () -> Unit,
     onEditLocation: () -> Unit,
+    onEditNickname: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val copiedMessage = stringResource(R.string.copied_to_clipboard)
     val kind = remember(device) { device.kind }
+    val coroutineScope = rememberCoroutineScope()
     // Prefer plain HTTP: a LAN admin page is usually served on 80/8080, while
     // an https:// URL on a local device almost always has a self-signed
     // certificate. HTTPS is still offered when it is the only open port.
@@ -197,6 +203,12 @@ fun DeviceDetailSheet(
                         value = device.models.distinct().joinToString(" · "),
                         onCopy = ::copy,
                     )
+                } else {
+                    // Show "no model info" explicitly when models list is empty
+                    InfoRow(
+                        label = stringResource(R.string.field_model),
+                        value = stringResource(R.string.unknown_model),
+                    )
                 }
                 CopyRow(
                     label = stringResource(R.string.field_type),
@@ -278,23 +290,42 @@ fun DeviceDetailSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                Button(
-                    onClick = onEditLocation,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(
-                            if (device.location != null) R.string.edit_location else R.string.set_location
+                    Button(
+                        onClick = onEditLocation,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
                         )
-                    )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (device.location != null) R.string.edit_location else R.string.set_location
+                            )
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onEditNickname,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(
+                                if (device.nickname != null) R.string.edit_nickname else R.string.set_nickname
+                            )
+                        )
+                    }
                 }
             }
         }

@@ -51,13 +51,25 @@ fun DeviceCard(
     device: NetworkDevice,
     onClick: () -> Unit,
     onEditLocation: () -> Unit,
+    onEditNickname: () -> Unit = {},
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
+    // Show vendor first, then model as fallback for brand display
+    // Show vendor first, then model as fallback for brand display
     val brand = device.vendor ?: device.models.firstOrNull()
     // Classification builds strings from services/ports; cache it so a list
     // scroll does not re-run the heuristic on every frame.
     val kind = remember(device) { device.kind }
+    // Show service count if device has services
+    val serviceCount = device.services.size
+    val hasServices = serviceCount > 0
+    // Show port count if device has open ports
+    val portCount = device.openPorts.size
+    val hasPorts = portCount > 0
+    // Discovery confidence based on number of sources
+    val confidence = device.sources.size
+    val highConfidence = confidence >= 3
 
     Card(
         modifier = modifier
@@ -122,7 +134,13 @@ fun DeviceCard(
                 )
 
                 Text(
-                    text = listOfNotNull(device.ip, brand).joinToString("  ·  "),
+                    text = listOfNotNull(
+                        device.ip,
+                        brand,
+                        if (hasServices) "$serviceCount serv." else null,
+                        if (hasPorts) "$portCount ports" else null,
+                        if (highConfidence) "✓" else null
+                    ).joinToString("  ·  "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

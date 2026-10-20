@@ -454,7 +454,7 @@ class MdnsDiscovery(context: Context) {
             recordName.trimEnd('.').removeSuffix(".local").takeIf { it.isNotBlank() }
 
         /**
-         * Extracts `md=` / `model=` values from a TXT record payload, which is
+         * Extracts model values from a TXT record payload, which is
          * how DNS-SD services advertise their model.
          */
         internal fun modelsOf(txt: String): List<String> {
@@ -470,7 +470,10 @@ class MdnsDiscovery(context: Context) {
             return models
         }
 
-        private val MODEL_KEYS = setOf("md", "model")
+        private val MODEL_KEYS = setOf(
+            "md", "model", "modelnumber", "model_id", "modelid",
+            "device", "devicename", "hardware", "hwrev", "hwmodel"
+        )
 
         private fun readTxt(data: ByteArray, start: Int, length: Int): String {
             val out = StringBuilder()

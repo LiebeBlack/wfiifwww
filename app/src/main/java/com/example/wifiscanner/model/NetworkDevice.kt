@@ -12,6 +12,7 @@ package com.example.wifiscanner.model
  * @param isSelf    True for the Android device running the scanner.
  * @param location  User-defined physical label ("Living Room") persisted in
  *                  Room, keyed by MAC. Editable in the UI.
+ * @param nickname  User-defined custom name/apodo persisted in Room, keyed by MAC.
  * @param sources   Every strategy that saw this device (ARP, ICMP, TCP,
  *                  SSDP, mDNS, NetBIOS, DNS). Lets the UI explain how it was
  *                  found and makes degraded scans visible instead of silent.
@@ -33,13 +34,14 @@ data class NetworkDevice(
     val hostname: String? = null,
     val isSelf: Boolean = false,
     val location: String? = null,
+    val nickname: String? = null,
     val sources: Set<DiscoverySource> = emptySet(),
     val services: List<String> = emptyList(),
     val openPorts: Set<Int> = emptySet(),
     val models: List<String> = emptyList(),
     val isGateway: Boolean = false,
 ) {
-    /** Stable identity for list diffs: prefer MAC (survives DHCP changes). */
+    /** Stable identity for list diffs: prefer MAC (survives DHCP changes), fall back to IP. */
     val stableId: String get() = mac ?: ip
 
     /** True when we know at least the L2/L3 identity. */
@@ -57,9 +59,21 @@ data class NetworkDevice(
         )
 
     /**
-     * Best display name we have: hostname, then model, then the raw address.
+     * Best display name we have: nickname first, then hostname, then model, then the raw address.
      * A computer therefore shows its machine name ("DESKTOP-ABC") and a
      * printer its advertised service name, exactly as the OS lists them.
      */
-    val displayName: String get() = hostname ?: models.firstOrNull() ?: ip
+    val displayName: String get() {
+        // Priority: nickname > hostname > model > ip
+        val customName = nickname?.takeIf { it.isNotBlank() }
+        val systemName = hostname
+        val modelInfo = models.firstOrNull()
+        return when {
+            customName != null -> customName
+            systemName != null && modelInfo != null -> "$systemName ($modelInfo)"
+            systemName != null -> systemName
+            modelInfo != null -> modelInfo
+            else -> ip
+        }
+    }
 }

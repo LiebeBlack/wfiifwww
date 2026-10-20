@@ -291,7 +291,37 @@ class NetworkScanner(context: Context) {
         }
         publish(phase = "Nombres NetBIOS…")
 
-        // ---- Phase 10: reverse DNS for hosts that still have no name --------
+        // ---- Phase 10: Third ARP read after all protocols for maximum MAC recovery
+        // Some devices only reveal their MAC after specific protocol interactions
+        val primedAgain = runCatching { ArpTableReader.readWithStatus() }.getOrNull()
+        if (primedAgain is ArpTableReader.ArpReadResult.Ok) {
+            for ((ip, entry) in primedAgain.entries) {
+                if (devices.containsKey(ip) && devices[ip]?.mac == null) {
+                    merge(ip = ip, source = DiscoverySource.Arp, mac = entry.mac)
+                }
+            }
+        }
+
+        // ---- Phase 10: aggressive MAC recovery for devices without MAC -------
+        val devicesWithoutMac = devices.values.filter { it.mac == null && !it.isSelf }
+        if (devicesWithoutMac.isNotEmpty()) {
+            publish(phase = "Recuperando MAC adicionales…")
+            coroutineScope {
+                val macRecoveryJobs = devicesWithoutMac.map { device ->
+                    async(Dispatchers.IO) {
+                        device.ip to tryRecoverMacFromArp(device.ip)
+                    }
+                }
+                for (job in macRecoveryJobs) {
+                    val (ip, mac) = job.await()
+                    if (mac != null) {
+                        merge(ip = ip, source = DiscoverySource.Arp, mac = mac)
+                    }
+                }
+            }
+        }
+
+        // ---- Phase 11: reverse DNS for hosts that still have no name --------
         val unnamed = devices.values.filter { it.hostname == null && !it.isSelf }
         if (unnamed.isNotEmpty()) {
             publish(phase = "Resolviendo ${unnamed.size} nombres…")
@@ -395,6 +425,23 @@ class NetworkScanner(context: Context) {
         throw e
     } catch (_: Exception) {
         null
+    }
+
+    /**
+     * Aggressive MAC recovery: tries multiple ARP table read attempts
+     * with different timing to catch devices that only appear after protocol interactions.
+     */
+    private suspend fun tryRecoverMacFromArp(ip: String): String? {
+        // Retry ARP reads with short delays to catch late-appearing entries
+        repeat(3) { attempt ->
+            val arp = runCatching { ArpTableReader.read() }.getOrNull()
+            val entry = arp?.get(ip)
+            if (entry != null && entry.isRealMac) {
+                return entry.mac
+            }
+            if (attempt < 2) delay(100) // Wait 100ms between attempts
+        }
+        return null
     }
 
     // ------------------------------------------------------------------
