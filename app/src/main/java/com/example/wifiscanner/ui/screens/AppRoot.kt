@@ -1,10 +1,15 @@
 package com.example.wifiscanner.ui.screens
 
 import androidx.annotation.StringRes
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DevicesOther
@@ -12,7 +17,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -82,8 +90,30 @@ fun AppRoot(
 
     var section by rememberSaveable { mutableStateOf(AppSection.Overview) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
+    // Keeps each section's scroll position across tab switches and while the
+    // search screen temporarily replaces the shell. Without it, every tab
+    // change re-created the LazyColumn state and jumped back to the top.
+    val sectionStates = rememberSaveableStateHolder()
     var detailDevice by remember { mutableStateOf<NetworkDevice?>(null) }
     var editingDevice by remember { mutableStateOf<NetworkDevice?>(null) }
+
+    // The bar doubles as a status line: the live scan phase while scanning and
+    // the network name on the overview. No extra screen is needed for it.
+    val loadingPhase = (state as? ScanUiState.Loading)?.phase
+    // While the first snapshot is still being read, stats is null: showing the
+    // app name avoids claiming "no Wi-Fi" for a frame.
+    val snapshot = stats
+    val ssidUnavailable = snapshot != null && snapshot.ssidHidden &&
+        (!snapshot.locationPermissionGranted || !snapshot.locationServicesEnabled)
+    val topSubtitle = loadingPhase ?: if (section == AppSection.Overview && snapshot != null) {
+        snapshot.ssid ?: when {
+            ssidUnavailable -> stringResource(R.string.dashboard_ssid_unavailable)
+            snapshot.ssidHidden -> stringResource(R.string.dashboard_ssid_hidden)
+            else -> stringResource(R.string.app_name)
+        }
+    } else {
+        null
+    }
 
     val devices = when (val current = state) {
         is ScanUiState.Loading -> current.devices
@@ -91,20 +121,23 @@ fun AppRoot(
         else -> emptyList<NetworkDevice>()
     }
 
-    // First composition means the permission gate just let us through: the
-    // ViewModel may have read the link *before* the grant, so refresh now that
-    // the SSID is actually readable. (ON_RESUME does not replay for a screen
-    // that appears while the app is already resumed.)
-    LaunchedEffect(Unit) { viewModel.refreshStats() }
-
     // Re-read the link whenever the network section becomes visible.
     LaunchedEffect(section) {
         if (section == AppSection.Network) viewModel.refreshStats()
     }
 
+    // The connectivity callbacks are registered only while this screen is
+    // started. ON_START/ON_STOP are the exact pair for a visible UI; keeping
+    // them registered while the app is backgrounded would hold a binder and
+    // wake the process for every network change (a real leak). ON_START is
+    // replayed when the observer is added to an already-resumed lifecycle, so
+    // this also covers the moment the permission gate lets us through.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.startMonitoring() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.stopMonitoring() }
+
     // Coming back from the system settings (or from a locked screen) must
     // refresh the link: the user may have granted the permission, enabled
-    // Wi-Fi or joined another network while the app was in the background.
+    // Wi-Fi or joined another network while the app was paused.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshStats()
     }
@@ -128,16 +161,9 @@ fun AppRoot(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            if (section == AppSection.Overview) {
-                                // The live network name is the most useful subtitle
-                                // here; the app name is only the fallback.
+                            if (topSubtitle != null) {
                                 Text(
-                                    text = stats?.ssid
-                                        ?: if (stats?.ssidHidden == true) {
-                                            stringResource(R.string.dashboard_ssid_hidden)
-                                        } else {
-                                            stringResource(R.string.app_name)
-                                        },
+                                    text = topSubtitle,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -147,6 +173,14 @@ fun AppRoot(
                         }
                     },
                     actions = {
+                        if (state is ScanUiState.Loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
                         if (devices.isNotEmpty()) {
                             IconButton(onClick = { ScanExport.share(context, devices) }) {
                                 Icon(
@@ -169,27 +203,30 @@ fun AppRoot(
                 )
             },
             bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp,
-                ) {
-                    AppSection.entries.forEach { item ->
-                        NavigationBarItem(
-                            selected = section == item,
-                            onClick = { section = item },
-                            icon = {
-                                Icon(
-                                    imageVector = item.icon,
-                                    contentDescription = null,
-                                )
-                            },
-                            label = { Text(stringResource(item.titleRes)) },
-                            colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                    ) {
+                        AppSection.entries.forEach { item ->
+                            NavigationBarItem(
+                                selected = section == item,
+                                onClick = { section = item },
+                                icon = {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = null,
+                                    )
+                                },
+                                label = { Text(stringResource(item.titleRes)) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                        }
                     }
                 }
             },
@@ -199,41 +236,50 @@ fun AppRoot(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                when (section) {
-                    AppSection.Overview -> DashboardScreen(
-                        state = state,
-                        stats = stats,
-                        devices = devices,
-                        onScan = viewModel::startScan,
-                        onStop = viewModel::cancelScan,
-                        onOpenDevices = { section = AppSection.Devices },
-                        onOpenNetwork = { section = AppSection.Network },
-                        onOpenDevice = { detailDevice = it },
-                    )
+                Crossfade(
+                    targetState = section,
+                    animationSpec = tween(durationMillis = 220),
+                    label = "seccion",
+                ) { current ->
+                    sectionStates.SaveableStateProvider(current.name) {
+                        when (current) {
+                            AppSection.Overview -> DashboardScreen(
+                                state = state,
+                                stats = stats,
+                                devices = devices,
+                                onScan = viewModel::startScan,
+                                onStop = viewModel::cancelScan,
+                                onOpenDevices = { section = AppSection.Devices },
+                                onOpenNetwork = { section = AppSection.Network },
+                                onOpenDevice = { detailDevice = it },
+                            )
 
-                    AppSection.Devices -> DevicesScreen(
-                        state = state,
-                        devices = devices,
-                        sort = uiSettings.sort,
-                        onSortChange = settings::setSort,
-                        groupByKind = uiSettings.groupByKind,
-                        onOpenDevice = { detailDevice = it },
-                        onEditLocation = { editingDevice = it },
-                        onScan = viewModel::startScan,
-                    )
+                            AppSection.Devices -> DevicesScreen(
+                                state = state,
+                                devices = devices,
+                                sort = uiSettings.sort,
+                                onSortChange = settings::setSort,
+                                groupByKind = uiSettings.groupByKind,
+                                onOpenDevice = { detailDevice = it },
+                                onEditLocation = { editingDevice = it },
+                                onScan = viewModel::startScan,
+                            )
 
-                    AppSection.Network -> NetworkScreen(
-                        stats = stats,
-                        devices = devices,
-                        onRefresh = viewModel::refreshStats,
-                    )
+                            AppSection.Network -> NetworkScreen(
+                                stats = stats,
+                                devices = devices,
+                                onRefresh = viewModel::refreshStats,
+                            )
 
-                    AppSection.Settings -> SettingsScreen(
-                        settings = settings,
-                        state = uiSettings,
-                        deviceCount = devices.size,
-                        onShare = { ScanExport.share(context, devices) },
-                    )
+                            AppSection.Settings -> SettingsScreen(
+                                settings = settings,
+                                state = uiSettings,
+                                stats = stats,
+                                deviceCount = devices.size,
+                                onShare = { ScanExport.share(context, devices) },
+                            )
+                        }
+                    }
                 }
             }
         }

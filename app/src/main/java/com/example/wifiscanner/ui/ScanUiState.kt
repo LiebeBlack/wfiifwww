@@ -36,7 +36,7 @@ sealed interface ScanUiState {
      * Scan completed successfully.
      * @param devices       the devices found (possibly empty).
      * @param note          non-fatal advisory shown as a banner, e.g. that the
-     *                      ARP table is hidden so MAC addresses may be missing.
+     *                      local subnet could not be determined.
      * @param elapsedMillis wall-clock duration of the scan, shown in the
      *                      statistics card.
      */

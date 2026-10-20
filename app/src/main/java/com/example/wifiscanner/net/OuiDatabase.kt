@@ -48,10 +48,26 @@ class OuiDatabase private constructor(private val prefixes: Array<String>, priva
         private const val ASSET_NAME = "oui.csv"
 
         /**
-         * Loads the OUI table from assets. Safe to call from any thread;
-         * reads once per process (~30 ms on a modern device).
+         * Process-wide cache. The table is immutable, so one instance is
+         * enough; rebuilding it on every stats refresh (once per network
+         * change) would re-read the whole CSV on the main thread's frame.
          */
-        fun load(context: Context): OuiDatabase = try {
+        @Volatile
+        private var cached: OuiDatabase? = null
+
+        /**
+         * Loads the OUI table from assets, once per process (~30 ms on a
+         * modern device). Safe to call from any thread.
+         */
+        fun load(context: Context): OuiDatabase {
+            cached?.let { return it }
+            return synchronized(this) {
+                cached ?: build(context.applicationContext).also { cached = it }
+            }
+        }
+
+        /** Reads and parses the asset; call only through [load]. */
+        private fun build(context: Context): OuiDatabase = try {
             val prefixes = ArrayList<String>(4096)
             val vendors = ArrayList<String>(4096)
             context.assets.open(ASSET_NAME).bufferedReader().use { reader ->
@@ -63,7 +79,7 @@ class OuiDatabase private constructor(private val prefixes: Array<String>, priva
             OuiDatabase(prefixes.toTypedArray(), vendors.toTypedArray())
         } catch (_: Exception) {
             // Asset missing or corrupt: degrade to an empty table (lookups
-            // return null and the UI shows "Unknown vendor").
+            // return null and the UI shows "Fabricante desconocido").
             OuiDatabase(emptyArray(), emptyArray())
         }
 

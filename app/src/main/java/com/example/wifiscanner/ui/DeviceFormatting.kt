@@ -35,6 +35,8 @@ internal fun NetworkDevice.matchesQuery(query: String): Boolean {
         append(kind.displayName().lowercase()).append(' ')
         services.forEach { append(it.lowercase()).append(' ') }
         models.forEach { append(it.lowercase()).append(' ') }
+        // Searching "ARP" or "mDNS" is a natural way to filter by evidence.
+        sources.forEach { source -> append(source.label.lowercase()).append(' ') }
         openPorts.forEach { append(it).append(' ') }
     }
     return haystack.contains(needle)
@@ -84,6 +86,7 @@ fun NetworkStatistics.Transport.displayName(): String = when (this) {
  * are evidence, not prose.
  */
 fun serviceLabel(raw: String): String = when (raw.trim()) {
+    // WS-Discovery classes.
     "Computer" -> "Ordenador"
     "Printer" -> "Impresora"
     "Scanner" -> "Escáner"
@@ -91,6 +94,19 @@ fun serviceLabel(raw: String): String = when (raw.trim()) {
     "Media player" -> "Reproductor multimedia"
     "Phone" -> "Teléfono"
     "Storage" -> "Almacenamiento"
+    "NAS" -> "NAS / almacenamiento"
+    // UPnP device classes (SSDP).
+    "InternetGatewayDevice" -> "Router / puerta de enlace"
+    "WANDevice" -> "Módem"
+    "WANConnectionDevice" -> "Conexión WAN"
+    "LANDevice" -> "Red local"
+    "MediaRenderer" -> "Reproductor multimedia"
+    "MediaServer" -> "Servidor multimedia"
+    "BinaryLight" -> "Luz inteligente"
+    "DimmableLight" -> "Luz regulable"
+    "Thermostat" -> "Termostato"
+    "Sensor" -> "Sensor"
+    "Basic" -> "Dispositivo básico"
     else -> raw
 }
 

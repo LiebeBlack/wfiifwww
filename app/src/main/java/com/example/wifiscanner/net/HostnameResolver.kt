@@ -52,8 +52,13 @@ class HostnameResolver(context: Context) {
         "_raop._tcp",
         "_spotify-connect._tcp",
         "_homekit._tcp",
+        "_matter._tcp",
         "_nanoleafapi._tcp",
         "_workstation._tcp",
+        "_ssh._tcp",
+        "_afpovertcp._tcp",
+        "_companion-link._tcp",
+        "_device-info._tcp",
     )
 
     // ------------------------------------------------------------------

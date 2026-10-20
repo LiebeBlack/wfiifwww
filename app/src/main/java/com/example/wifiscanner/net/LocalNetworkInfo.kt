@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.NetworkInterface
 
 /**
@@ -101,15 +102,27 @@ object LocalNetworkInfo {
 
     /** Strategy 1: real Wi-Fi interface enumeration (works on hotspot too). */
     private fun viaWifiInterface(): Subnet? = try {
-        NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
-            .filter { !isMobileOrVpn(it.name) }
-            .firstNotNullOfOrNull { iface ->
-                if (iface.isUp && !iface.isLoopback && isWifiLike(iface.name)) {
-                    subnetOf(iface)
-                } else null
-            }
+        wifiInterfaces().firstNotNullOfOrNull { iface -> subnetOf(iface) }
     } catch (_: Exception) {
         null
+    }
+
+    /**
+     * Wi-Fi-like interfaces, `wlan*` first. Interface enumeration order is not
+     * specified, and a phone sharing its connection exposes both `wlan0` (the
+     * network it is on) and `ap0`/`softap0` (its own hotspot); without this
+     * ordering the scanner could sweep the hotspot subnet instead of the real
+     * one.
+     */
+    private fun wifiInterfaces(): List<NetworkInterface> = try {
+        NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+            .filter { iface ->
+                isWifiLike(iface.name) && iface.isUp && !iface.isLoopback &&
+                    !isMobileOrVpn(iface.name)
+            }
+            .sortedBy { iface -> if (iface.name.startsWith("wlan")) 0 else 1 }
+    } catch (_: Exception) {
+        emptyList()
     }
 
     /** Strategy 2: whatever the ConnectivityManager says the link is. */
@@ -205,7 +218,9 @@ object LocalNetworkInfo {
         MOBILE_OR_VPN_PREFIXES.any { name.startsWith(it) }
 
     /**
-     * True for the RFC1918 LAN ranges. Link-local 169.254/16 is deliberately
+     * True for the address ranges that can appear on a home/office LAN:
+     * RFC1918 plus the carrier-grade NAT range 100.64/10, which many routers
+     * and mobile hotspots hand out. Link-local 169.254/16 is deliberately
      * rejected: it means DHCP failed, so there is no LAN to scan.
      */
     private fun isPrivateIpv4(ip: String?): Boolean {
@@ -213,8 +228,54 @@ object LocalNetworkInfo {
         val first = (value shr 24) and 0xFF
         val second = (value shr 16) and 0xFF
         return first == 10L ||
+            (first == 100L && second in 64L..127L) ||
             (first == 172L && second in 16L..31L) ||
             (first == 192L && second == 168L)
+    }
+
+    /**
+     * Name and global IPv6 addresses of the interface that carries LAN traffic.
+     *
+     * Link-local (`fe80::`) addresses are deliberately dropped: they are not
+     * routable and only add noise to the network screen. Everything is guarded
+     * so a ROM that blocks interface enumeration returns an empty snapshot.
+     */
+    data class SelfInterface(
+        val name: String? = null,
+        val ipv6Addresses: List<String> = emptyList(),
+    )
+
+    /** Best-effort description of the LAN interface, never throws. */
+    fun selfInterface(): SelfInterface = try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+        val chosen = wifiInterfaces().firstOrNull { isUpWithPrivateIpv4(it) }
+            ?: interfaces.firstOrNull { !isMobileOrVpn(it.name) && isUpWithPrivateIpv4(it) }
+        SelfInterface(
+            name = chosen?.name,
+            ipv6Addresses = chosen?.inetAddresses?.toList().orEmpty()
+                .filterIsInstance<Inet6Address>()
+                .filterNot { address ->
+                    address.isLoopbackAddress ||
+                        address.isLinkLocalAddress ||
+                        address.isMulticastAddress ||
+                        address.isAnyLocalAddress
+                }
+                .mapNotNull { address -> address.hostAddress?.substringBefore('%') }
+                .distinct(),
+        )
+    } catch (_: Exception) {
+        SelfInterface()
+    }
+
+    /** True when [iface] is up and holds a private IPv4 address. */
+    private fun isUpWithPrivateIpv4(iface: NetworkInterface): Boolean = try {
+        iface.isUp && !iface.isLoopback &&
+            iface.inetAddresses.toList().any { address ->
+                address is Inet4Address && !address.isLoopbackAddress &&
+                    isPrivateIpv4(address.hostAddress)
+            }
+    } catch (_: Exception) {
+        false
     }
 
     /** The device's own non-loopback IPv4 on the given subnet's interface. */

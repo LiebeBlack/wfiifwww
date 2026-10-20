@@ -65,6 +65,16 @@ object NetworkStatistics {
         val linkSpeedMbps: Int? = null,
         val rxLinkSpeedMbps: Int? = null,
         val txLinkSpeedMbps: Int? = null,
+        /** Negotiated PHY generation, e.g. "Wi-Fi 5 (802.11ac)". */
+        val wifiStandard: String? = null,
+        val maxRxLinkSpeedMbps: Int? = null,
+        val maxTxLinkSpeedMbps: Int? = null,
+        /** Brand of the access point, resolved offline from the BSSID. */
+        val accessPointVendor: String? = null,
+        /** True when the AP does not broadcast its SSID. */
+        val hiddenSsid: Boolean? = null,
+        /** Wi-Fi network id; -1 / null when not associated. */
+        val networkId: Int? = null,
         val wifiEnabled: Boolean? = null,
         // --- IPv4 configuration -------------------------------------------
         val ipAddress: String? = null,
@@ -78,6 +88,10 @@ object NetworkStatistics {
         val leaseSeconds: Int? = null,
         /** Usable host addresses in the subnet (2^(32-prefix) - 2). */
         val subnetHosts: Int? = null,
+        /** LAN interface name, e.g. "wlan0". */
+        val interfaceName: String? = null,
+        /** Global (non-link-local) IPv6 addresses of the LAN interface. */
+        val ipv6Addresses: List<String> = emptyList(),
         // --- Capabilities --------------------------------------------------
         val transport: Transport? = null,
         val metered: Boolean? = null,
@@ -91,23 +105,36 @@ object NetworkStatistics {
         val app = context.applicationContext
         val wifiManager = app.getSystemService(Context.WIFI_SERVICE) as? WifiManager
         val wifiInfo = readWifiInfo(app, wifiManager)
-        val dhcp = readDhcpInfo(wifiManager)
         val subnet = runCatching { LocalNetworkInfo.detect(app) }.getOrNull()
         val selfIp = subnet?.let { runCatching { LocalNetworkInfo.selfIp(it) }.getOrNull() }
+        val selfInterface = runCatching { LocalNetworkInfo.selfInterface() }
+            .getOrDefault(LocalNetworkInfo.SelfInterface())
         val networks = readNetworks(app)
 
         // VPN or a transient active-network change must not look like "no Wi-Fi".
         val wifiConnected = networks?.wifi == true ||
             runCatching { LocalNetworkInfo.isOnWifi(app) }.getOrDefault(false)
 
+        // WifiManager keeps the last DHCP lease after the link is gone. Reading
+        // it unconditionally made the app show a stale IP/gateway while on
+        // mobile data, so it is only used while Wi-Fi is actually connected.
+        val dhcp = if (wifiConnected) readDhcpInfo(wifiManager) else null
+
         // WifiInfo keeps the last network after Wi-Fi is turned off; showing
         // that stale SSID/signal is exactly what made the app look wrong.
         // Reading SSID/BSSID can throw SecurityException on some ROMs even
         // with the permission granted; a null simply means "redactado".
-        val ssid = if (wifiConnected) {
-            runCatching { sanitizeSsid(wifiInfo?.ssid) }.getOrNull()
-        } else {
+        //
+        // Two sources are tried because they disagree on some OEM ROMs: the
+        // per-network WifiInfo (authoritative with a VPN) and the legacy
+        // connectionInfo, which occasionally still carries the real name when
+        // the first one is redacted.
+        val primarySsid = runCatching { wifiInfo?.ssid }.getOrNull()
+        val ssid = if (!wifiConnected) {
             null
+        } else {
+            runCatching { sanitizeSsid(primarySsid) }.getOrNull()
+                ?: runCatching { sanitizeSsid(readLegacySsid(wifiManager)) }.getOrNull()
         }
         val bssid = if (wifiConnected) {
             runCatching {
@@ -122,6 +149,13 @@ object NetworkStatistics {
             null
         }
         val frequency = if (wifiConnected) wifiInfo?.frequency?.takeIf { it > 0 } else null
+        val accessPointVendor = if (wifiConnected) {
+            bssid?.let { address ->
+                runCatching { OuiDatabase.load(app).lookup(address) }.getOrNull()
+            }
+        } else {
+            null
+        }
 
         return WifiStatistics(
             ssid = ssid,
@@ -147,18 +181,36 @@ object NetworkStatistics {
             } else {
                 null
             },
+            wifiStandard = if (wifiConnected) wifiStandardOf(wifiInfo) else null,
+            maxRxLinkSpeedMbps = if (wifiConnected && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                wifiInfo?.maxSupportedRxLinkSpeedMbps?.takeIf { it > 0 }
+            } else {
+                null
+            },
+            maxTxLinkSpeedMbps = if (wifiConnected && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                wifiInfo?.maxSupportedTxLinkSpeedMbps?.takeIf { it > 0 }
+            } else {
+                null
+            },
+            accessPointVendor = accessPointVendor,
+            hiddenSsid = if (wifiConnected) hiddenSsidOf(wifiInfo) else null,
+            networkId = if (wifiConnected) wifiInfo?.networkId?.takeIf { it >= 0 } else null,
             wifiEnabled = runCatching { wifiManager?.isWifiEnabled }.getOrNull(),
             // Interface enumeration first; the DHCP lease is the backstop.
             ipAddress = selfIp ?: dhcp?.ip?.takeIf { it != "0.0.0.0" },
             prefixLength = subnet?.prefixLength,
             networkAddress = subnet?.networkAddress,
             broadcastAddress = subnet?.broadcastAddress(),
-            gateway = dhcp?.gateway?.takeIf { it != "0.0.0.0" },
-            dns1 = dhcp?.dns1?.takeIf { it != "0.0.0.0" },
-            dns2 = dhcp?.dns2?.takeIf { it != "0.0.0.0" },
+            // DHCP first (authoritative for Wi-Fi); LinkProperties covers a
+            // static IP, Ethernet and a VPN.
+            gateway = dhcp?.gateway?.takeIf { it != "0.0.0.0" } ?: networks?.gateway,
+            dns1 = dhcp?.dns1?.takeIf { it != "0.0.0.0" } ?: networks?.dns?.getOrNull(0),
+            dns2 = dhcp?.dns2?.takeIf { it != "0.0.0.0" } ?: networks?.dns?.getOrNull(1),
             dhcpServer = dhcp?.server?.takeIf { it != "0.0.0.0" },
             leaseSeconds = dhcp?.leaseSeconds?.takeIf { it > 0 },
             subnetHosts = subnet?.let { usableHosts(it.prefixLength) },
+            interfaceName = selfInterface.name,
+            ipv6Addresses = selfInterface.ipv6Addresses,
             transport = networks?.transport,
             metered = networks?.metered,
             vpnActive = networks?.vpn,
@@ -191,6 +243,36 @@ object NetworkStatistics {
             in 4900..5895 -> "5 GHz"
             in 5925..7125 -> "6 GHz"
             else -> null
+        }
+    }
+
+    /** `WifiInfo.getHiddenSSID()`, guarded: it is the only accessor available. */
+    @Suppress("DEPRECATION")
+    private fun hiddenSsidOf(info: WifiInfo?): Boolean? = try {
+        info?.hiddenSSID
+    } catch (_: Throwable) {
+        null
+    }
+
+    /**
+     * PHY generation of the current link, from `WifiInfo.wifiStandard`
+     * (API 30+). The numeric values are the documented constants and are used
+     * literally so the file keeps compiling on older SDK stubs.
+     */
+    private fun wifiStandardOf(info: WifiInfo?): String? {
+        if (info == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return try {
+            when (info.wifiStandard) {
+                1 -> "802.11 a/b/g"
+                4 -> "Wi-Fi 4 (802.11n)"
+                5 -> "Wi-Fi 5 (802.11ac)"
+                6 -> "Wi-Fi 6/6E (802.11ax)"
+                7 -> "WiGig (802.11ad)"
+                8 -> "Wi-Fi 7 (802.11be)"
+                else -> null
+            }
+        } catch (_: Throwable) {
+            null
         }
     }
 
@@ -242,7 +324,9 @@ object NetworkStatistics {
                         String(payload.toByteArray(), Charsets.UTF_8)
                     }.getOrNull()
                         ?.trim()
-                        ?.takeIf { text -> text.isNotEmpty() && text.all { it >= ' ' } }
+                        ?.takeIf { text ->
+                            text.isNotEmpty() && text.none { it < ' ' || it == '\uFFFD' }
+                        }
                     if (decoded != null) return decoded
                 }
             }
@@ -269,13 +353,21 @@ object NetworkStatistics {
             val viaCapabilities = runCatching {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                     as? ConnectivityManager ?: return@runCatching null
-                cm.allNetworks.firstNotNullOfOrNull { network ->
+                // The active network is the best candidate; the rest follow in
+                // whatever order the platform reports (a VPN may be active
+                // while the Wi-Fi link underneath is the one we want).
+                val active = cm.activeNetwork
+                val networks = cm.allNetworks.toList()
+                val ordered = ArrayList<android.net.Network>(networks.size + 1)
+                active?.let { ordered.add(it) }
+                ordered.addAll(networks.filter { it != active })
+                ordered.firstNotNullOfOrNull { network ->
                     val caps = cm.getNetworkCapabilities(network)
-                    if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                        caps.transportInfo as? WifiInfo
-                    } else {
-                        null
+                        ?: return@firstNotNullOfOrNull null
+                    if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                        return@firstNotNullOfOrNull null
                     }
+                    caps.transportInfo as? WifiInfo
                 }
             }.getOrNull()
             if (viaCapabilities != null) return viaCapabilities
@@ -285,6 +377,14 @@ object NetworkStatistics {
         } catch (_: Exception) {
             null
         }
+    }
+
+    /** Legacy SSID accessor, used only when the per-network one is redacted. */
+    @Suppress("DEPRECATION")
+    private fun readLegacySsid(wifiManager: WifiManager?): String? = try {
+        wifiManager?.connectionInfo?.ssid
+    } catch (_: Throwable) {
+        null
     }
 
     /** DHCP lease details; null on setups without DHCP (static IP). */
@@ -318,13 +418,27 @@ object NetworkStatistics {
         if (cm == null) {
             null
         } else {
-            val activeCaps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
-            val allCaps = cm.allNetworks.mapNotNull { network -> cm.getNetworkCapabilities(network) }
-            val wifiCaps = allCaps.firstOrNull { caps ->
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            val activeNetwork = cm.activeNetwork
+            val activeCaps = activeNetwork?.let { cm.getNetworkCapabilities(it) }
+            val allNetworks = cm.allNetworks.toList()
+            val allCaps = allNetworks.mapNotNull { network -> cm.getNetworkCapabilities(network) }
+            val wifiNetwork = allNetworks.firstOrNull { network ->
+                cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             }
+            val wifiCaps = wifiNetwork?.let { cm.getNetworkCapabilities(it) }
             val vpn = allCaps.any { caps -> caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) }
             val chosen = wifiCaps ?: activeCaps
+            // The chosen network's link properties describe its addressing
+            // even when no DHCP lease is readable (static IP, Ethernet).
+            val link = runCatching {
+                (wifiNetwork ?: activeNetwork)?.let { network -> cm.getLinkProperties(network) }
+            }.getOrNull()
+            val gateway = runCatching {
+                link?.routes?.firstOrNull { route -> route.isDefaultRoute }?.gateway?.hostAddress
+            }.getOrNull()
+            val dns = runCatching {
+                link?.dnsServers?.mapNotNull { server -> server.hostAddress }.orEmpty()
+            }.getOrDefault(emptyList())
             NetworkSnapshot(
                 transport = when {
                     wifiCaps != null -> Transport.Wifi
@@ -346,6 +460,8 @@ object NetworkStatistics {
                 vpn = vpn,
                 downstreamKbps = chosen?.linkDownstreamBandwidthKbps?.takeIf { it > 0 },
                 upstreamKbps = chosen?.linkUpstreamBandwidthKbps?.takeIf { it > 0 },
+                gateway = gateway,
+                dns = dns,
             )
         }
     } catch (_: Exception) {
@@ -389,6 +505,8 @@ object NetworkStatistics {
         val vpn: Boolean,
         val downstreamKbps: Int?,
         val upstreamKbps: Int?,
+        val gateway: String? = null,
+        val dns: List<String> = emptyList(),
     )
 
     private data class DhcpSnapshot(

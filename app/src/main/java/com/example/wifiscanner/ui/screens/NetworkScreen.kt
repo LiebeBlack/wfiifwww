@@ -121,12 +121,15 @@ fun NetworkScreen(
                     // State first: connected, connected-but-redacted, off, or
                     // simply not on Wi-Fi. This is what the user came for.
                     LinkStatusRow(stats)
+                    val ssidNeedsLocation = stats.ssidHidden &&
+                        (!stats.locationPermissionGranted || !stats.locationServicesEnabled)
                     InfoRow(
                         label = stringResource(R.string.stat_ssid),
-                        value = stats.ssid ?: if (stats.ssidHidden) {
-                            stringResource(R.string.dashboard_ssid_hidden)
-                        } else {
-                            null
+                        value = stats.ssid ?: when {
+                            ssidNeedsLocation ->
+                                stringResource(R.string.dashboard_ssid_unavailable)
+                            stats.ssidHidden -> stringResource(R.string.dashboard_ssid_hidden)
+                            else -> null
                         },
                     )
                     InfoRow(stringResource(R.string.stat_bssid), stats.bssid, monospace = true)
@@ -146,8 +149,32 @@ fun NetworkScreen(
                         value = stats.frequencyMhz?.let { "$it MHz" },
                     )
                     InfoRow(
+                        label = stringResource(R.string.stat_standard),
+                        value = stats.wifiStandard,
+                    )
+                    InfoRow(
                         label = stringResource(R.string.stat_link_speed),
                         value = stats.linkSpeedMbps?.let { "$it Mbps" },
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_max_speed),
+                        value = if (stats.maxRxLinkSpeedMbps != null || stats.maxTxLinkSpeedMbps != null) {
+                            "${stats.maxRxLinkSpeedMbps ?: 0} / ${stats.maxTxLinkSpeedMbps ?: 0} Mbps"
+                        } else {
+                            null
+                        },
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_ap_vendor),
+                        value = stats.accessPointVendor,
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_hidden_ssid),
+                        value = stats.hiddenSsid?.let { hidden -> if (hidden) yes else no },
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_network_id),
+                        value = stats.networkId?.toString(),
                     )
                     InfoRow(
                         label = stringResource(R.string.stat_rx_tx),
@@ -170,6 +197,14 @@ fun NetworkScreen(
                     )
                     if (stats.signalLevel != null) {
                         SignalBars(level = stats.signalLevel)
+                    }
+                    if (stats.hiddenSsid == true) {
+                        Text(
+                            text = stringResource(R.string.network_hidden_ssid_note),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
                     }
                     if (linkMissing) UnavailableNote()
                 }
@@ -215,6 +250,16 @@ fun NetworkScreen(
                 )
                 InfoRow(stringResource(R.string.stat_network), stats?.networkAddress, monospace = true)
                 InfoRow(stringResource(R.string.stat_broadcast), stats?.broadcastAddress, monospace = true)
+                InfoRow(
+                    label = stringResource(R.string.stat_interface),
+                    value = stats?.interfaceName,
+                    monospace = true,
+                )
+                InfoRow(
+                    label = stringResource(R.string.stat_ipv6),
+                    value = stats?.ipv6Addresses?.take(3)?.joinToString(" · "),
+                    monospace = true,
+                )
                 InfoRow(stringResource(R.string.stat_gateway), stats?.gateway, monospace = true)
                 InfoRow(
                     label = stringResource(R.string.stat_dns),
@@ -229,7 +274,7 @@ fun NetworkScreen(
                     },
                 )
                 InfoRow(stringResource(R.string.stat_hosts), stats?.subnetHosts?.toString())
-                if (ipv4Missing) UnavailableNote()
+                if (stats == null) LoadingRow() else if (ipv4Missing) UnavailableNote()
             }
         }
 
@@ -252,7 +297,7 @@ fun NetworkScreen(
                         null
                     },
                 )
-                if (capabilitiesMissing) UnavailableNote()
+                if (stats == null) LoadingRow() else if (capabilitiesMissing) UnavailableNote()
             }
         }
 

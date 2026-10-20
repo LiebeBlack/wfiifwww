@@ -2,29 +2,45 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ===================== Networking ===================== -->
-    <!-- Raw sockets / ping sweep / DNS lookups. -->
+    <!-- ===================== Red ===================== -->
+    <!-- Sockets TCP/UDP, ping, DNS y descargas de descripciones UPnP. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Read Wi-Fi connection info (SSID, DHCP info -> local IP/netmask). -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <!-- Monitor connectivity state to know when we're on Wi-Fi. -->
+    <!-- Estado de la conexión: saber si hay Wi-Fi, VPN o datos móviles. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Required for WifiManager.MulticastLock: without it the Wi-Fi driver
-         filters multicast frames and SSDP, WS-Discovery and mDNS hear nothing.
-         This is a normal permission, granted at install time. -->
+    <!-- Leer SSID/BSSID, DHCP y el estado del adaptador Wi-Fi. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Activar/desactivar el Wi-Fi desde los accesos directos de la app. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- MulticastLock: sin este permiso el driver filtra multicast y SSDP,
+         WS-Discovery y mDNS no recibirían ninguna respuesta. Es un permiso
+         normal, concedido al instalar. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <!-- Android 13+: acceso a información de redes Wi-Fi cercanas. Se declara
+         con neverForLocation (concedido al instalar) para poder leer el SSID
+         también cuando el usuario prefiere no compartir ubicación. -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="tiramisu" />
 
-    <!-- ===================== Location ===================== -->
-    <!-- Android gates all Wi-Fi scan results behind location permission.
-         FINE is required to *start* scans on API 29+; we request at runtime. -->
+    <!-- ===================== Ubicación ===================== -->
+    <!-- Android exige ubicación para leer el nombre real de la red (SSID) y
+         los datos DHCP. Se solicita en tiempo de ejecución. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- Coarse is implied by FINE but declared explicitly for clarity on API 31+. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- NEARBY_WIFI_DEVICES is intentionally NOT declared: the scanner reads
-         connection info and DHCP leases, which are gated by location, and it
-         does not use Wi-Fi Aware/RTT. Asking for it at runtime only added a
-         permission that could be denied and block the scanner for no reason. -->
+    <!-- ===================== Teléfono ===================== -->
+    <!-- Permiso normal (sin diálogo) con el estado básico del teléfono, útil
+         en ROMs que lo consultan al enumerar interfaces de red. -->
+    <uses-permission android:name="android.permission.READ_BASIC_PHONE_STATE" />
+    <!-- Declarado para completar el conjunto de conectividad: la app nunca
+         solicita identificadores ni datos personales del teléfono. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!-- La app funciona en tablets y TVs sin Wi-Fi gracias a Ethernet/USB. -->
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
 
     <application
         android:name=".WifiScannerApp"
@@ -33,13 +49,17 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.WifiScanner"
-        android:usesCleartextTraffic="false"
-        tools:targetApi="34">
+        android:usesCleartextTraffic="true"
+        tools:targetApi="35">
+
+        <!-- HTTP sin cifrar está permitido únicamente porque UPnP publica la
+             descripción del dispositivo en una URL http:// de la red local.
+             No se envía ni se recibe nada fuera de la LAN. -->
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|uiMode|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

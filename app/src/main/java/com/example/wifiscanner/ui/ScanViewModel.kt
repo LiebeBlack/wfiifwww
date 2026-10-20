@@ -17,11 +17,12 @@ import com.example.wifiscanner.model.NetworkDevice
 import com.example.wifiscanner.net.LocalNetworkInfo
 import com.example.wifiscanner.net.NetworkScanner
 import com.example.wifiscanner.net.NetworkStatistics
-import com.example.wifiscanner.ui.components.hasScannerPermissions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,10 +41,12 @@ import kotlinx.coroutines.withContext
  *  - Merge live scan results with persisted location labels so a device's
  *    label appears/updates instantly after the user saves one, without a
  *    rescan.
- *  - Keep [stats] current: a single default-network callback refreshes the
- *    Wi-Fi snapshot when the link changes (connect, disconnect, VPN on/off,
- *    new SSID), debounced so a burst of capability updates does not spam the
- *    CPU. The callback is unregistered in [onCleared], so it cannot leak.
+ *  - Keep [stats] current: a default-network callback plus a Wi-Fi transport
+ *    request refresh the snapshot when the link changes (connect, disconnect,
+ *    VPN on/off, new SSID), debounced so a burst of capability updates does
+ *    not spam the CPU. [startMonitoring]/[stopMonitoring] tie the
+ *    registration to the visible lifecycle and [onCleared] unregisters as a
+ *    final safety net, so the callbacks cannot leak.
  *  - Survive configuration changes (rotation) — the scan keeps running in
  *    `viewModelScope` and the UI re-collects the StateFlow.
  */
@@ -74,19 +77,33 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         application.getSystemService(ConnectivityManager::class.java)
 
     /**
-     * Refresh trigger for the stats snapshot. Runs on a binder thread, so it
-     * only schedules a coroutine; the snapshot itself is read on Dispatchers.Default.
+     * Builds a refresh trigger for the stats snapshot.
+     *
+     * Callbacks arrive on a binder thread, so they only schedule a coroutine;
+     * the snapshot itself is read on `Dispatchers.IO`.
+     *
+     * Each registration needs its **own** callback object: the platform keeps
+     * one registration record per callback, so registering the same instance
+     * for two requests is rejected ("Callback already registered") and, even
+     * when accepted, a single [stopMonitoring] could not release both.
      */
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = scheduleStatsRefresh()
+    private fun newRefreshCallback(): ConnectivityManager.NetworkCallback =
+        object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = scheduleStatsRefresh()
 
-        override fun onLost(network: Network) = scheduleStatsRefresh()
+            override fun onLost(network: Network) = scheduleStatsRefresh()
 
-        override fun onCapabilitiesChanged(
-            network: Network,
-            networkCapabilities: NetworkCapabilities,
-        ) = scheduleStatsRefresh()
-    }
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities,
+            ) = scheduleStatsRefresh()
+        }
+
+    /** Fires when the default (internet-carrying) network changes. */
+    private val defaultNetworkCallback = newRefreshCallback()
+
+    /** Fires when any Wi-Fi link appears/disappears, even if it is not default. */
+    private val wifiNetworkCallback = newRefreshCallback()
 
     /**
      * Wi-Fi changes must refresh the snapshot even when the Wi-Fi link is not
@@ -98,14 +115,49 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
         .build()
 
-    init {
+    /** True while the callbacks are registered (guards double registration). */
+    private var monitoring = false
+
+    /**
+     * Registers the connectivity callbacks. Called when the UI becomes visible
+     * (`ON_START`) and paired with [stopMonitoring] on `ON_STOP`, which is the
+     * lifecycle that actually matches the resource: a registered network
+     * callback keeps a binder connection and wakes the process on every link
+     * change, so it must not outlive the visible screen.
+     *
+     * Registering the same callback twice throws `IllegalArgumentException`, so
+     * the call is idempotent.
+     */
+    fun startMonitoring() {
+        if (monitoring) return
         refreshStats()
-        runCatching {
-            connectivityManager?.registerDefaultNetworkCallback(networkCallback)
-        }
-        runCatching {
-            connectivityManager?.registerNetworkCallback(wifiNetworkRequest, networkCallback)
-        }
+        val defaultRegistered = runCatching {
+            connectivityManager?.registerDefaultNetworkCallback(defaultNetworkCallback)
+            connectivityManager != null
+        }.getOrDefault(false)
+        val wifiRegistered = runCatching {
+            // Also listen to Wi-Fi that is not the default network: a VPN or a
+            // Wi-Fi without internet would otherwise never trigger a refresh.
+            connectivityManager?.registerNetworkCallback(wifiNetworkRequest, wifiNetworkCallback)
+            connectivityManager != null
+        }.getOrDefault(false)
+        // If neither registration worked (no ConnectivityManager on a
+        // non-standard ROM) the next ON_START retries instead of silently
+        // treating the app as "monitoring" forever.
+        monitoring = defaultRegistered || wifiRegistered
+    }
+
+    /** Unregisters the callbacks and drops any debounced refresh. */
+    fun stopMonitoring() {
+        if (!monitoring) return
+        monitoring = false
+        statsJob?.cancel()
+        statsJob = null
+        // Each callback owns its own registration, so both must be released:
+        // leaving the Wi-Fi one registered would keep a binder callback (and
+        // its process wakeups) alive after the screen is gone.
+        runCatching { connectivityManager?.unregisterNetworkCallback(defaultNetworkCallback) }
+        runCatching { connectivityManager?.unregisterNetworkCallback(wifiNetworkCallback) }
     }
 
     /**
@@ -132,12 +184,10 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         scanner.reset() // stale mDNS names from another network would mislabel
         refreshStats() // the network may have changed since the last scan
 
-        // The permission can be revoked in system settings while the app is
-        // alive; fail with a clear message instead of a generic exception.
-        if (!hasScannerPermissions(getApplication())) {
-            _scanState.value = ScanUiState.Error(messageFor(NetworkScanner.ScanError.PermissionDenied))
-            return
-        }
+        // Scanning itself does not need the location permission: sockets,
+        // multicast and the neighbour table work without it. Only the SSID is
+        // redacted, and the UI explains how to fix that. Blocking the scan here
+        // was what made a denied permission look like a broken scanner.
 
         scanJob = viewModelScope.launch {
             val startedAt = System.currentTimeMillis()
@@ -145,6 +195,11 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 var last: NetworkScanner.ScanUpdate? = null
                 scanner.scan().collect { update ->
+                    // A cancelled scan (new scan started, or "Detener") must
+                    // never write another frame: the flow emits from an IO
+                    // thread, so without this guard a late emission could
+                    // overwrite the state the user just switched to.
+                    if (!currentCoroutineContext().isActive) return@collect
                     last = update
                     scanDevices.value = update.devices
                     _scanState.value = ScanUiState.Loading(
@@ -171,12 +226,12 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
                 val found = scanDevices.value
                 if (found.isEmpty()) {
                     _scanState.value = ScanUiState.Error(
-                        e.message ?: "El escaneo falló de forma inesperada."
+                        e.message ?: "El análisis falló de forma inesperada."
                     )
                 } else {
                     _scanState.value = ScanUiState.Success(
                         devices = found,
-                        note = "El escaneo terminó con advertencias: " +
+                        note = "El análisis terminó con advertencias: " +
                             (e.message ?: e.javaClass.simpleName),
                         elapsedMillis = System.currentTimeMillis() - startedAt,
                     )
@@ -196,6 +251,9 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Coalesces bursts of network callbacks into one snapshot read. */
     private fun scheduleStatsRefresh() {
+        // A callback delivered while the UI is stopping must not schedule work
+        // that would read the link after the screen is gone.
+        if (!monitoring) return
         loadStats(delayMillis = 400)
     }
 
@@ -203,7 +261,9 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         statsJob?.cancel()
         statsJob = viewModelScope.launch {
             if (delayMillis > 0) delay(delayMillis)
-            val snapshot = withContext(Dispatchers.Default) {
+            // Interface enumeration and the OUI asset read are blocking I/O,
+            // so this belongs on the IO pool rather than Default.
+            val snapshot = withContext(Dispatchers.IO) {
                 NetworkStatistics.snapshot(getApplication())
             }
             _stats.value = snapshot
@@ -213,17 +273,17 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
     /** Maps a typed scan failure to a user-readable message. */
     private fun messageFor(error: NetworkScanner.ScanError): String = when (error) {
         NetworkScanner.ScanError.WifiOff ->
-            "El Wi-Fi está desactivado. Actívalo e inténtalo de nuevo."
+            "El Wi-Fi está desactivado. Actívelo e inténtelo de nuevo."
         NetworkScanner.ScanError.NotOnWifi ->
             if (!LocalNetworkInfo.isOnWifi(getApplication())) {
-                "No estás conectado a una red Wi-Fi. Conéctate e inténtalo de nuevo."
+                "No hay conexión a una red Wi-Fi. Conéctese e inténtelo de nuevo."
             } else {
-                "No se pudo acceder a la red. Inténtalo de nuevo."
+                "No se pudo acceder a la red. Inténtelo de nuevo."
             }
         NetworkScanner.ScanError.PermissionDenied ->
-            "El escaneo necesita el permiso de ubicación. Concédelo e inténtalo de nuevo."
+            "El análisis necesita el permiso de ubicación. Concédalo e inténtelo de nuevo."
         NetworkScanner.ScanError.Unknown ->
-            "El escaneo falló de forma inesperada."
+            "El análisis falló de forma inesperada."
     }
 
     /** Cancels a running scan (UI "Detener" action); results keep what we have. */
@@ -258,10 +318,9 @@ class ScanViewModel(application: Application) : AndroidViewModel(application) {
         }
 
     override fun onCleared() {
+        scanJob?.cancel()
         statsJob?.cancel()
-        runCatching {
-            connectivityManager?.unregisterNetworkCallback(networkCallback)
-        }
+        stopMonitoring()
         super.onCleared()
     }
 

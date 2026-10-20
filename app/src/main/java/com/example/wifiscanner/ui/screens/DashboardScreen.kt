@@ -111,9 +111,13 @@ fun DashboardScreen(
                 ssid = stats?.ssid,
                 connected = stats?.wifiConnected == true,
                 ssidHidden = stats?.ssidHidden == true,
+                locationPermissionGranted = stats?.locationPermissionGranted != false,
+                locationEnabled = stats?.locationServicesEnabled != false,
                 wifiEnabled = stats?.wifiEnabled,
                 signalLevel = stats?.signalLevel,
                 signalDbm = stats?.signalDbm,
+                loading = stats == null,
+                linkTransport = stats?.transport?.displayName(),
                 band = stats?.band,
                 channel = stats?.channel,
                 speedMbps = stats?.linkSpeedMbps,
@@ -235,20 +239,43 @@ fun DashboardScreen(
                         },
                     )
                     InfoRow(
+                        label = stringResource(R.string.stat_standard),
+                        value = stats.wifiStandard,
+                    )
+                    InfoRow(
                         label = stringResource(R.string.stat_link_speed),
                         value = stats.linkSpeedMbps?.let { "$it Mbps" },
                     )
-                    InfoRow(stringResource(R.string.stat_ip), stats.ipAddress)
-                    InfoRow(stringResource(R.string.stat_gateway), stats.gateway)
+                    InfoRow(
+                        label = stringResource(R.string.stat_ap_vendor),
+                        value = stats.accessPointVendor,
+                    )
+                    InfoRow(stringResource(R.string.stat_ip), stats.ipAddress, monospace = true)
+                    InfoRow(
+                        label = stringResource(R.string.stat_gateway),
+                        value = stats.gateway,
+                        monospace = true,
+                    )
                     InfoRow(
                         label = stringResource(R.string.stat_dns),
                         value = listOfNotNull(stats.dns1, stats.dns2)
                             .joinToString(" · ")
                             .ifBlank { null },
+                        monospace = true,
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_dhcp),
+                        value = stats.dhcpServer,
+                        monospace = true,
                     )
                     InfoRow(
                         label = stringResource(R.string.stat_hosts),
                         value = stats.subnetHosts?.toString(),
+                    )
+                    InfoRow(
+                        label = stringResource(R.string.stat_ipv6),
+                        value = stats.ipv6Addresses.take(2).joinToString(" · ").ifBlank { null },
+                        monospace = true,
                     )
                     if (stats.ipAddress == null && stats.gateway == null &&
                         stats.dns1 == null && stats.dns2 == null && stats.subnetHosts == null

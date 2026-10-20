@@ -140,19 +140,28 @@ object PingSweep {
      * missing or the host never answers, so the caller falls back to TCP.
      */
     private suspend fun pingOnce(ip: String): Boolean = withContext(Dispatchers.IO) {
+        var process: Process? = null
         try {
-            val process = ProcessBuilder("ping", "-c", "1", "-w", "$PING_TIMEOUT_SEC", ip)
+            val started = ProcessBuilder("ping", "-c", "1", "-w", "$PING_TIMEOUT_SEC", ip)
                 .redirectErrorStream(true)
                 .start()
-            // Drain output so the ping buffer can't fill and block the child.
-            process.inputStream.bufferedReader().use { it.readText() }
-            val finished = withTimeoutOrNull(PING_WAIT_MILLIS) { process.waitFor() == 0 }
-            if (finished == null) process.destroy()
-            finished == true
+            process = started
+            // Never read the pipe to end: a stuck binary would block the
+            // reader forever. One ICMP reply produces only a few hundred
+            // bytes, so the pipe can never fill while we wait for the exit.
+            val exit = withTimeoutOrNull(PING_WAIT_MILLIS) { started.waitFor() }
+            exit == 0
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             false // ping binary unavailable — the TCP probe takes over.
+        } finally {
+            try {
+                process?.destroy()
+                process?.inputStream?.close()
+            } catch (_: Exception) {
+                // Killing the probe is best-effort.
+            }
         }
     }
 
@@ -211,10 +220,18 @@ object PingSweep {
     // ------------------------------------------------------------------
 
     private const val PING_TIMEOUT_SEC = 1
-    private const val PING_WAIT_MILLIS = 2_500L
-    private const val CONNECT_TIMEOUT_MILLIS = 400L
-    private const val TCP_WINDOW_MILLIS = 1_200L
-    private const val MAX_CONCURRENCY = 64
+    private const val PING_WAIT_MILLIS = 2_200L
+    private const val CONNECT_TIMEOUT_MILLIS = 350L
+    private const val TCP_WINDOW_MILLIS = 1_400L
+
+    /**
+     * Hosts probed at once. Each host opens its port probes in parallel, so
+     * this is the real socket budget: 24 × 20 ports = 480 descriptors, safely
+     * below the ~1024 per-process limit Android enforces. Overshooting it made
+     * `connect` fail with EMFILE, which looked like "host offline" and
+     * silently dropped devices; finishing a /24 in ~25 s is the better trade.
+     */
+    private const val MAX_CONCURRENCY = 24
 
     /** Ports for the neighbour-priming datagrams (discard / DNS / SSDP). */
     private val PRIME_PORTS = listOf(9, 53, 1900)
@@ -231,10 +248,20 @@ object PingSweep {
         445,   // SMB (Windows, NAS)
         139,   // NetBIOS session service
         22,    // SSH (routers, Raspberry Pi)
+        53,    // DNS (routers, Pi-hole)
         554,   // RTSP (IP cameras)
-        8080,  // alternate HTTP
+        631,   // IPP (printers)
+        5000,  // Synology DSM / UPnP
+        5555,  // ADB inalámbrico (Android TV, móviles)
+        5900,  // VNC
         8008,  // Chromecast
+        8009,  // Chromecast (CASTV2)
+        8080,  // alternate HTTP
+        8443,  // alternate HTTPS
+        9000,  // Portainer / NAS
         9100,  // JetDirect printers
+        32400, // Plex
+        3389,  // Escritorio remoto
         62078, // iOS lockdown (iPhone / iPad)
     )
 }

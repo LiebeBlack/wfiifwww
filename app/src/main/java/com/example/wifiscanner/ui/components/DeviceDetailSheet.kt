@@ -1,5 +1,8 @@
 package com.example.wifiscanner.ui.components
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -68,6 +72,18 @@ fun DeviceDetailSheet(
     val context = LocalContext.current
     val copiedMessage = stringResource(R.string.copied_to_clipboard)
     val kind = remember(device) { device.kind }
+    // Prefer plain HTTP: a LAN admin page is usually served on 80/8080, while
+    // an https:// URL on a local device almost always has a self-signed
+    // certificate. HTTPS is still offered when it is the only open port.
+    val webUrl = remember(device) {
+        when {
+            80 in device.openPorts -> "http://${device.ip}"
+            8080 in device.openPorts -> "http://${device.ip}:8080"
+            443 in device.openPorts -> "https://${device.ip}"
+            8443 in device.openPorts -> "https://${device.ip}:8443"
+            else -> null
+        }
+    }
 
     /** Copies [value] and confirms it with a toast. */
     fun copy(value: String) {
@@ -175,6 +191,11 @@ fun DeviceDetailSheet(
                         onCopy = ::copy,
                     )
                 }
+                CopyRow(
+                    label = stringResource(R.string.field_type),
+                    value = kind.displayName(),
+                    onCopy = ::copy,
+                )
                 device.location?.let { location ->
                     CopyRow(
                         label = stringResource(R.string.field_location),
@@ -217,6 +238,22 @@ fun DeviceDetailSheet(
                 }
             }
 
+            // ---- Web panel ----------------------------------------------
+            if (webUrl != null) {
+                OutlinedButton(
+                    onClick = { openInBrowser(context, webUrl) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Link,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.device_open_web))
+                }
+            }
+
             // ---- Label --------------------------------------------------
             if (device.mac == null) {
                 Text(
@@ -245,6 +282,17 @@ fun DeviceDetailSheet(
                 }
             }
         }
+    }
+}
+
+/** Opens [url] in the user's browser, ignoring the case with no handler. */
+private fun openInBrowser(context: Context, url: String) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        Toast.makeText(context, R.string.browser_unavailable, Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -51,6 +51,7 @@ import com.example.wifiscanner.ui.ScanUiState
 import com.example.wifiscanner.ui.displayName
 import com.example.wifiscanner.ui.components.DeviceCard
 import com.example.wifiscanner.ui.components.EmptyState
+import com.example.wifiscanner.ui.components.NoteBanner
 import com.example.wifiscanner.ui.components.SectionHeader
 import com.example.wifiscanner.ui.components.iconForKind
 
@@ -78,6 +79,11 @@ fun DevicesScreen(
     var sortMenuOpen by remember { mutableStateOf(false) }
     val errorMessage = (state as? ScanUiState.Error)?.message
     val scanning = state is ScanUiState.Loading
+    val note = when (val current = state) {
+        is ScanUiState.Loading -> current.note
+        is ScanUiState.Success -> current.note
+        else -> null
+    }
 
     val activeKind = kindFilter?.let { name -> DeviceKind.entries.firstOrNull { it.name == name } }
     val kindsPresent = remember(devices) {
@@ -144,6 +150,13 @@ fun DevicesScreen(
                     }
                 }
             }
+        }
+
+        if (note != null) {
+            NoteBanner(
+                note = note,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+            )
         }
 
         if (scanning) {
@@ -230,7 +243,11 @@ fun DevicesScreen(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
-                        items(groupDevices, key = { it.ip }) { device ->
+                        items(
+                            items = groupDevices,
+                            key = { it.ip },
+                            contentType = { "dispositivo" },
+                        ) { device ->
                             DeviceCard(
                                 device = device,
                                 onClick = { onOpenDevice(device) },
@@ -239,7 +256,11 @@ fun DevicesScreen(
                         }
                     }
                 } else {
-                    items(filtered, key = { it.ip }) { device ->
+                    items(
+                        items = filtered,
+                        key = { it.ip },
+                        contentType = { "dispositivo" },
+                    ) { device ->
                         DeviceCard(
                             device = device,
                             onClick = { onOpenDevice(device) },

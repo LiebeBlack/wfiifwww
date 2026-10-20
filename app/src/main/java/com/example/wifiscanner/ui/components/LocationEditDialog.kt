@@ -2,9 +2,16 @@ package com.example.wifiscanner.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -16,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.wifiscanner.R
 
@@ -24,7 +33,8 @@ import com.example.wifiscanner.R
  *
  * Shows the device's identity (IP/MAC) for context, a text field prefilled
  * with the current label, Save (always enabled — clearing is allowed, which
- * deletes the label), and Cancel (discards).
+ * deletes the label), and Cancel (discards). Deleting is a third action, kept
+ * inside the content so the button row never overflows on a narrow screen.
  *
  * @param mac          identity of the labeled device (null for unknown).
  * @param initialLabel current label, or null when unset.
@@ -40,7 +50,8 @@ fun LocationEditDialog(
     onDismiss: () -> Unit,
 ) {
     // Local edit state so Cancel truly discards changes.
-    var text by remember(mac) { mutableStateOf(initialLabel.orEmpty()) }
+    var text by remember(mac, initialLabel) { mutableStateOf(initialLabel.orEmpty()) }
+    val save = { onSave(text.trim()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -56,37 +67,54 @@ fun LocationEditDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Context line so the user knows which device they're labeling.
-                Text(text = buildString {
-                    append(ip)
-                    mac?.let { append("  •  ") ; append(it) }
-                })
+                Text(
+                    text = buildString {
+                        append(ip)
+                        mac?.let { append("  •  "); append(it) }
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
                     label = { Text(stringResource(R.string.label_location)) },
                     placeholder = { Text(stringResource(R.string.location_hint)) },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (!initialLabel.isNullOrBlank()) {
+                    TextButton(
+                        onClick = { onSave("") },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(text.trim()) }) {
+            TextButton(onClick = save) {
                 Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                // Delete only makes sense when a label already exists.
-                if (!initialLabel.isNullOrBlank()) {
-                    TextButton(onClick = { onSave("") }) {
-                        Text(stringResource(R.string.delete))
-                    }
-                }
-                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.cancel))
-                }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
             }
         },
     )

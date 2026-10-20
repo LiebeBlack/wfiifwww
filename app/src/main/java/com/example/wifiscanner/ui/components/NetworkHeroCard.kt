@@ -1,6 +1,12 @@
 package com.example.wifiscanner.ui.components
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,17 +50,26 @@ import com.example.wifiscanner.R
  * is what keeps the card from claiming "no Wi-Fi" on a perfectly good link.
  *
  * The gradient is built from the theme's containers, so it follows light,
- * dark and dynamic colour without hard-coded hues. The content animates its
- * height so the scanning phase and the action row do not jump.
+ * dark and dynamic colour without hard-coded hues. Only the progress area
+ * animates, and only when a scan starts or stops, so a phase change never
+ * triggers a layout animation.
  */
 @Composable
 fun NetworkHeroCard(
     ssid: String?,
     connected: Boolean,
     ssidHidden: Boolean,
+    /** Whether the location permission is granted (needed to read the SSID). */
+    locationPermissionGranted: Boolean = true,
+    /** Whether the system location switch is on (also needed for the SSID). */
+    locationEnabled: Boolean = true,
     wifiEnabled: Boolean?,
     signalLevel: Int?,
     signalDbm: Int?,
+    /** True while the first snapshot is still being read. */
+    loading: Boolean = false,
+    /** Transport in use when it is not Wi-Fi (Ethernet, VPN, ...). */
+    linkTransport: String? = null,
     band: String?,
     channel: Int?,
     speedMbps: Int?,
@@ -66,15 +81,29 @@ fun NetworkHeroCard(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Android withholds the SSID for two very different reasons: the network
+    // really is hidden, or location is off/denied. Saying "red oculta" in the
+    // second case would be wrong and would hide the exact fix from the user.
+    val ssidNeedsLocation = ssidHidden && (!locationPermissionGranted || !locationEnabled)
+
     // The status line answers "am I on Wi-Fi?"; the title separately answers
     // "which network?" and may say "red oculta" when Android redacts it.
     val status = when {
+        // Never claim "no Wi-Fi" before the first read finishes: that flash is
+        // exactly what made a connected phone look offline on cold start.
+        loading -> stringResource(R.string.dashboard_reading_network)
         connected -> stringResource(R.string.dashboard_connected)
         wifiEnabled == false -> stringResource(R.string.dashboard_wifi_off)
+        linkTransport != null -> stringResource(R.string.dashboard_other_transport, linkTransport)
         else -> stringResource(R.string.dashboard_wifi_disconnected)
     }
-    val title = ssid ?: when {
-        connected && ssidHidden -> stringResource(R.string.dashboard_ssid_hidden)
+    val title = when {
+        loading -> stringResource(R.string.dashboard_reading_network)
+        ssid != null -> ssid
+        connected && ssidHidden -> stringResource(
+            if (ssidNeedsLocation) R.string.dashboard_ssid_unavailable
+            else R.string.dashboard_ssid_hidden
+        )
         else -> stringResource(R.string.dashboard_no_network)
     }
 
@@ -93,7 +122,12 @@ fun NetworkHeroCard(
             )
             .padding(20.dp),
     ) {
-        Column(modifier = Modifier.animateContentSize()) {
+        Column {
+            // Deliberately no animateContentSize here: it re-ran a layout
+            // animation on every scan phase (a dozen per scan), which is the
+            // main source of jank while the progress bar is visible. The only
+            // animated block is the progress area, and it animates once per
+            // scan start/stop.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = if (connected) Icons.Filled.Wifi else Icons.Filled.WifiOff,
@@ -133,7 +167,10 @@ fun NetworkHeroCard(
             if (ssidHidden) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = stringResource(R.string.dashboard_ssid_hidden_hint),
+                    text = stringResource(
+                        if (ssidNeedsLocation) R.string.dashboard_ssid_hidden_hint
+                        else R.string.network_hidden_ssid_note
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                 )
@@ -189,23 +226,35 @@ fun NetworkHeroCard(
                 }
             }
 
-            if (scanning) {
-                Spacer(Modifier.height(14.dp))
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(5.dp)
-                        .clip(CircleShape),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f),
-                )
-                if (!phase.isNullOrBlank()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = phase,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            AnimatedVisibility(
+                visible = scanning,
+                enter = fadeIn(tween(160)) + expandVertically(tween(200)),
+                exit = fadeOut(tween(120)) + shrinkVertically(tween(160)),
+            ) {
+                Column {
+                    Spacer(Modifier.height(14.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(CircleShape),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f),
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Crossfade(
+                        targetState = phase.orEmpty(),
+                        animationSpec = tween(220),
+                        label = "fase",
+                    ) { current ->
+                        Text(
+                            text = current,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

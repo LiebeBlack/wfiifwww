@@ -2,8 +2,10 @@ package com.example.wifiscanner.net
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Build
 import com.example.wifiscanner.model.DiscoverySource
 import com.example.wifiscanner.model.NetworkDevice
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,8 +26,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Discovery strategies, in the order they run:
  *
  *  1. **ARP / neighbour table** (instant, no packets) — richest data (MAC +
- *     vendor), but hidden on Android 10+; unavailable is recorded as a note,
- *     never as an error.
+ *     vendor), but hidden on Android 10+. When it is hidden the reader simply
+ *     returns nothing: the UI never warns about it, because the other
+ *     strategies recover the same information.
  *  2. **SSDP / UPnP M-SEARCH** (multicast) — routers, TVs, consoles, printers,
  *     NAS and IoT announce themselves with a device class. Works with no
  *     subnet knowledge and no MAC address, so it is the safety net when ARP
@@ -56,8 +59,8 @@ class NetworkScanner(context: Context) {
         /** Everything discovered so far, sorted by IP. */
         val devices: List<NetworkDevice>,
         /**
-         * Non-fatal advisory: the scan ran in a degraded mode (ARP hidden, no
-         * subnet detected, ...). Rendered as a banner, never as an error.
+         * Non-fatal advisory: the scan ran in a degraded mode (no subnet
+         * detected, ...). Rendered as a banner, never as an error.
          */
         val note: String? = null,
     )
@@ -68,10 +71,12 @@ class NetworkScanner(context: Context) {
     private val wsd = WsDiscovery(appContext)
     private val mdns = MdnsDiscovery(appContext)
     private val netbios = NetBiosDiscovery(appContext)
-    private val oui = OuiDatabase.load(appContext)
+    // Lazy: the table is ~150 KB of CSV, so it is read on the scan's IO thread
+    // instead of during ViewModel creation on the main thread.
+    private val oui by lazy { OuiDatabase.load(appContext) }
 
-    /** True when the bundled OUI table loaded (else vendors show "Unknown"). */
-    val hasOuiData: Boolean = oui.lookup("B8:27:EB") != null // Raspberry Pi prefix
+    /** True when the bundled OUI table loaded (else vendors show "Desconocido"). */
+    val hasOuiData: Boolean by lazy { oui.lookup("B8:27:EB") != null } // Raspberry Pi
 
     /**
      * Emits progressive device lists over the course of a single scan.
@@ -87,6 +92,8 @@ class NetworkScanner(context: Context) {
         // ---- Environment ---------------------------------------------------
         val subnet = runCatching { LocalNetworkInfo.detect(appContext) }.getOrNull()
         val selfIp = subnet?.let { s -> runCatching { LocalNetworkInfo.selfIp(s) }.getOrNull() }
+        // Exactly the addresses that will be probed: 1..254 on a /24.
+        val hostCount = subnet?.let { s -> s.hostAddresses().count() } ?: 0
         val arp = runCatching { ArpTableReader.readWithStatus() }
             .getOrElse { ArpTableReader.ArpReadResult.Unavailable }
 
@@ -109,11 +116,15 @@ class NetworkScanner(context: Context) {
             mac: String? = null,
             ports: Set<Int>? = null,
             models: List<String>? = null,
+            vendor: String? = null,
         ) {
             val base = devices[ip] ?: NetworkDevice(ip = ip, mac = null)
             devices[ip] = base.copy(
                 mac = mac ?: base.mac,
-                hostname = hostname ?: base.hostname,
+                // First name wins: SSDP's friendly name is the nicest, then
+                // mDNS, then NetBIOS, and reverse DNS only fills blanks.
+                hostname = base.hostname ?: hostname,
+                vendor = vendor ?: base.vendor,
                 isSelf = base.isSelf || ip == selfIp,
                 sources = if (source != null) base.sources + source else base.sources,
                 services = (base.services + listOfNotNull(service) + services.orEmpty()).distinct(),
@@ -122,10 +133,21 @@ class NetworkScanner(context: Context) {
             )
         }
 
-        publish(phase = "Preparando…")
+        publish(phase = "Preparando el análisis…")
 
         if (subnet == null) notes += NOTE_NO_SUBNET
-        if (arp is ArpTableReader.ArpReadResult.Unavailable) notes += NOTE_NO_ARP
+
+        // The phone itself is part of the network: listing it first makes the
+        // results complete and gives the user a reference point for "this
+        // device" labels. Build.MODEL is the only friendly name available
+        // without extra permissions.
+        if (selfIp != null) {
+            merge(
+                ip = selfIp,
+                source = DiscoverySource.Self,
+                hostname = Build.MODEL?.takeIf { it.isNotBlank() },
+            )
+        }
 
         // ---- Phase 1: whatever the neighbour cache already knows ------------
         if (arp is ArpTableReader.ArpReadResult.Ok) {
@@ -134,7 +156,7 @@ class NetworkScanner(context: Context) {
                 merge(ip = ip, source = DiscoverySource.Arp, mac = entry.mac)
             }
         }
-        publish(phase = "Leyendo la tabla de vecinos…")
+        publish(phase = "Revisando la caché local…")
 
         // ---- Phases 2-4: multicast + active sweep, in parallel --------------
         var ssdpResults: Map<String, SsdpDiscovery.SsdpResponse> = emptyMap()
@@ -151,7 +173,10 @@ class NetworkScanner(context: Context) {
             val netbiosJob = async(Dispatchers.IO) { safeNetbios(subnet) }
 
             if (subnet != null) {
-                publish(phase = "Sondeando ${subnet.networkAddress}/${subnet.prefixLength}…")
+                publish(
+                    phase = "Sondeando ${subnet.networkAddress}/${subnet.prefixLength} " +
+                        "($hostCount direcciones)…",
+                )
                 // The sweep callback fires from worker coroutines, so results
                 // are collected thread-safely and merged afterwards.
                 val alive = ConcurrentHashMap<String, PingSweep.HostResult>()
@@ -159,7 +184,20 @@ class NetworkScanner(context: Context) {
                 for (host in alive.values) {
                     merge(ip = host.ip, source = host.source, ports = host.openPorts)
                 }
-                publish(phase = "Identificando puertos abiertos…")
+                // The sweep forced the kernel to resolve every live host, so a
+                // second read now recovers MAC addresses (and therefore OUI
+                // vendors) that were missing before the probes. Merged only
+                // for devices that actually answered, so stale entries cannot
+                // add phantom hosts.
+                val primed = runCatching { ArpTableReader.readWithStatus() }.getOrNull()
+                if (primed is ArpTableReader.ArpReadResult.Ok) {
+                    for ((ip, entry) in primed.entries) {
+                        if (devices.containsKey(ip)) {
+                            merge(ip = ip, source = DiscoverySource.Arp, mac = entry.mac)
+                        }
+                    }
+                }
+                publish(phase = "Clasificando los dispositivos…")
             } else {
                 publish(phase = "Buscando anuncios de red…")
             }
@@ -176,7 +214,14 @@ class NetworkScanner(context: Context) {
         // Only the short device class is shown ("InternetGatewayDevice"); the
         // full URNs stay on the model for diagnostics.
         for ((ip, response) in ssdpResults) {
-            merge(ip = ip, source = DiscoverySource.Ssdp, service = response.kind)
+            merge(
+                ip = ip,
+                source = DiscoverySource.Ssdp,
+                service = response.kind,
+                hostname = response.friendlyName,
+                vendor = response.manufacturer,
+                models = listOfNotNull(response.model),
+            )
         }
         publish(phase = "Anuncios SSDP/UPnP…")
 
@@ -232,7 +277,10 @@ class NetworkScanner(context: Context) {
         }
 
         // ---- Finalize: offline OUI vendor lookup ---------------------------
+        // A manufacturer advertised over UPnP is more precise than the OUI
+        // owner (which is often the chipset vendor), so OUI only fills blanks.
         for ((ip, device) in devices.entries.toList()) {
+            if (device.vendor != null) continue
             val mac = device.mac ?: continue
             val vendor = oui.lookup(mac) ?: continue
             devices[ip] = device.copy(vendor = vendor)
@@ -249,8 +297,16 @@ class NetworkScanner(context: Context) {
                 (appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)?.isWifiEnabled
             }.getOrNull()
             val onWifi = runCatching { LocalNetworkInfo.isOnWifi(appContext) }.getOrDefault(false)
-            if (wifiEnabled == false) throw ScanException(ScanError.WifiOff)
-            if (!onWifi) throw ScanException(ScanError.NotOnWifi)
+            if (!onWifi) {
+                // Wi-Fi off *and* no other LAN (Ethernet/hotspot) to scan is a
+                // real failure; Wi-Fi off with Ethernet connected is not.
+                if (wifiEnabled == false && subnet == null) {
+                    throw ScanException(ScanError.WifiOff)
+                }
+                throw ScanException(ScanError.NotOnWifi)
+            }
+            // On Wi-Fi with nothing answering is a valid empty result, not an
+            // error: the list simply shows the empty state.
         }
     }.flowOn(Dispatchers.IO)
 
@@ -263,24 +319,32 @@ class NetworkScanner(context: Context) {
 
     private suspend fun safeSsdp(): Map<String, SsdpDiscovery.SsdpResponse> = try {
         ssdp.discover()
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyMap()
     }
 
     private suspend fun safeMdns(): Map<String, String> = try {
         hostnameResolver.discoverMdns()
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyMap()
     }
 
     private suspend fun safeWsd(): Map<String, WsDiscovery.WsdResponse> = try {
         wsd.discover()
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyMap()
     }
 
     private suspend fun safeMdnsRaw(): Map<String, MdnsDiscovery.MdnsAnswer> = try {
         mdns.discover()
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyMap()
     }
@@ -289,12 +353,16 @@ class NetworkScanner(context: Context) {
         subnet: LocalNetworkInfo.Subnet?,
     ): Map<String, NetBiosDiscovery.NbstatResult> = try {
         netbios.discover(subnet?.broadcastAddress() ?: NetBiosDiscovery.GLOBAL_BROADCAST)
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         emptyMap()
     }
 
     private suspend fun safeRdns(ip: String): String? = try {
         hostnameResolver.reverseDns(ip)
+    } catch (e: CancellationException) {
+        throw e
     } catch (_: Exception) {
         null
     }
@@ -330,10 +398,5 @@ class NetworkScanner(context: Context) {
             "No se pudo determinar la subred local, así que se omitió el barrido de " +
                 "direcciones; los dispositivos se buscaron mediante anuncios multicast " +
                 "(SSDP/mDNS)."
-
-        private const val NOTE_NO_ARP =
-            "Esta versión de Android oculta la tabla ARP, por lo que pueden faltar " +
-                "direcciones MAC y fabricantes. Los dispositivos se siguen detectando por " +
-                "ICMP, TCP, SSDP y mDNS."
     }
 }

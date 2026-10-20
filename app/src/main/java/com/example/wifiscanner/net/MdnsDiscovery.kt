@@ -279,7 +279,11 @@ class MdnsDiscovery(context: Context) {
             "_http._tcp.local",
             "_homekit._tcp.local",
             "_hap._tcp.local",
+            "_matter._tcp.local",
             "_rtsp._tcp.local",
+            "_ssh._tcp.local",
+            "_device-info._tcp.local",
+            "_companion-link._tcp.local",
         )
     }
 

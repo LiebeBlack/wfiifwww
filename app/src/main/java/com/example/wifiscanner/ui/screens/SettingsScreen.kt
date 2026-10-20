@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -48,10 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.example.wifiscanner.R
+import com.example.wifiscanner.net.NetworkStatistics
 import com.example.wifiscanner.ui.AppSettings
 import com.example.wifiscanner.ui.DeviceSort
 import com.example.wifiscanner.ui.SystemSettings
 import com.example.wifiscanner.ui.UiSettings
+import com.example.wifiscanner.ui.components.InfoRow
 import com.example.wifiscanner.ui.components.SectionHeader
 import com.example.wifiscanner.ui.components.hasScannerPermissions
 import com.example.wifiscanner.ui.components.isLocationServicesEnabled
@@ -70,6 +73,7 @@ fun SettingsScreen(
     state: UiSettings,
     deviceCount: Int,
     onShare: () -> Unit,
+    stats: NetworkStatistics.WifiStatistics? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -176,6 +180,63 @@ fun SettingsScreen(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = stringResource(R.string.settings_permissions_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        item { SectionHeader(title = stringResource(R.string.settings_device), icon = Icons.Filled.Smartphone) }
+
+        item {
+            SettingsCard {
+                InfoRow(
+                    label = stringResource(R.string.settings_device_model),
+                    value = listOf(Build.MANUFACTURER, Build.MODEL)
+                        .filter { part ->
+                            part.isNotBlank() && !part.equals("unknown", ignoreCase = true)
+                        }
+                        .joinToString(" ")
+                        .ifBlank { null },
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_android),
+                    value = "Android ${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_interface),
+                    value = stats?.interfaceName,
+                    monospace = true,
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_local_ip),
+                    value = listOfNotNull(
+                        stats?.ipAddress,
+                        stats?.prefixLength?.let { "/$it" },
+                    ).joinToString("").ifBlank { null },
+                    monospace = true,
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_subnet),
+                    value = stats?.let { snapshot ->
+                        snapshot.networkAddress?.let { address ->
+                            address + (snapshot.prefixLength?.let { "/$it" } ?: "")
+                        }
+                    },
+                    monospace = true,
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_gateway),
+                    value = stats?.gateway,
+                    monospace = true,
+                )
+                InfoRow(
+                    label = stringResource(R.string.settings_current_network),
+                    value = stats?.ssid,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.settings_device_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

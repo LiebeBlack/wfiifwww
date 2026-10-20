@@ -1,5 +1,7 @@
 package com.example.wifiscanner.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,16 +12,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -39,7 +44,14 @@ fun LabeledBar(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.primary,
 ) {
-    val fraction = if (max <= 0) 0f else (count.toFloat() / max).coerceIn(0.04f, 1f)
+    val target = if (max <= 0) 0f else (count.toFloat() / max).coerceIn(0.04f, 1f)
+    // Animated once per data change (not per frame), so the bars settle
+    // smoothly when a scan finds new devices without costing layout passes.
+    val fraction by animateFloatAsState(
+        targetValue = target,
+        animationSpec = tween(durationMillis = 420),
+        label = "barra",
+    )
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -81,7 +93,9 @@ fun LabeledBar(
             text = count.toString(),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(20.dp),
+            textAlign = TextAlign.End,
+            // A fixed 20.dp clipped three-digit counts (a /24 can yield 254).
+            modifier = Modifier.widthIn(min = 20.dp),
         )
     }
 }
