@@ -12,11 +12,12 @@
 #   keyAlias=myreleasekey
 #   keyPassword=changeme
 #
-# Reproducible unsigned release:
-#   If app/release.properties is absent, the workflow produces an unsigned
-#   release APK (minify enabled, shrink on) that is still a valid APK
-#   artifact you can install with adb and test. Signing is then layered on
-#   only when the secrets below are set.
+# No secrets yet?
+#   If the secrets below are absent, the workflow generates an ephemeral
+#   self-signed JKS keystore on the runner so the APK is ALWAYS signed and
+#   installable — Android rejects unsigned APKs with a "package is not
+#   valid" / "app not installed" error. Set the secrets below to sign with
+#   the real project key instead.
 #
 # GitHub secrets to add (Actions secrets, not repo variables):
 #   ANDROID_RELEASE_KEYSTORE_BASE64   # base64 of your .jks/.keystore
@@ -25,4 +26,5 @@
 #   ANDROID_RELEASE_KEY_PASSWORD
 #
 # Recommendation: use a release key, not your debug key, for branded builds.
-# Unsigned artifacts are fine for internal testing and first-release CI.
+# The ephemeral CI signature is fine for sideloading and testing; it is not
+# suitable for the Play Store (every run would generate a different key).

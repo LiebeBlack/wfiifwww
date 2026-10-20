@@ -3,12 +3,15 @@ package com.example.wifiscanner.net
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 
 /**
@@ -145,7 +148,16 @@ class HostnameResolver(context: Context) {
         return discovered
     }
 
-    /** Resolves a single discovered service to its host IP + display name. */
+    /**
+     * Resolves a single discovered service to its host IP + display name.
+     *
+     * Android 14 (API 34) deprecated the one-shot [NsdManager.resolveService]
+     * listener in favour of [NsdManager.registerServiceInfoCallback], which
+     * resolves the service and then streams updates until unregistered. The
+     * first update (or the service disappearing) completes this one-shot
+     * request; older devices keep the legacy listener — the only one that
+     * exists below API 34.
+     */
     private fun resolveService(
         info: NsdServiceInfo,
         onResolved: (ip: String?, name: String?) -> Unit,
@@ -154,13 +166,31 @@ class HostnameResolver(context: Context) {
             onResolved(null, null)
             return
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val callback = OneShotServiceInfoCallback(manager, onResolved)
+            try {
+                // Direct executor: callbacks arrive on the system's handler
+                // thread — exactly where the legacy ResolveListener ran.
+                manager.registerServiceInfoCallback(info, Executor { it.run() }, callback)
+            } catch (_: Exception) {
+                callback.onRegistrationAborted()
+            }
+        } else {
+            resolveViaLegacyListener(manager, info, onResolved)
+        }
+    }
+
+    /** API < 34: the original one-shot resolve (deprecated from API 34 on). */
+    @Suppress("DEPRECATION") // below API 34 this is the only one-shot resolver
+    private fun resolveViaLegacyListener(
+        manager: NsdManager,
+        info: NsdServiceInfo,
+        onResolved: (ip: String?, name: String?) -> Unit,
+    ) {
         try {
             manager.resolveService(info, object : NsdManager.ResolveListener {
                 override fun onServiceResolved(resolved: NsdServiceInfo) {
-                    val ip = resolved.host?.hostAddress
-                    val name = resolved.serviceName?.takeIf { it.isNotBlank() }
-                        ?: resolved.serviceType
-                    onResolved(ip, name)
+                    onResolved(serviceHostAddress(resolved), nameOf(resolved))
                 }
 
                 override fun onResolveFailed(info: NsdServiceInfo?, errorCode: Int) {
@@ -170,6 +200,75 @@ class HostnameResolver(context: Context) {
         } catch (_: Exception) {
             onResolved(null, null)
         }
+    }
+
+    /**
+     * One-shot wrapper around the API 34+ [NsdManager.ServiceInfoCallback]:
+     * the first resolved update (or the service being lost) delivers the
+     * result and unregisters, so the continuous callback behaves exactly like
+     * the single-shot resolve it replaced. Delivery happens at most once, so a
+     * late update or a double failure can never call back twice.
+     */
+    private inner class OneShotServiceInfoCallback(
+        private val manager: NsdManager,
+        private val onResolved: (ip: String?, name: String?) -> Unit,
+    ) : NsdManager.ServiceInfoCallback {
+        private val delivered = AtomicBoolean(false)
+
+        override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
+            if (!delivered.compareAndSet(false, true)) return
+            unregisterQuietly()
+            onResolved(serviceHostAddress(serviceInfo), nameOf(serviceInfo))
+        }
+
+        override fun onServiceLost() {
+            if (delivered.compareAndSet(false, true)) {
+                unregisterQuietly()
+                onResolved(null, null)
+            }
+        }
+
+        override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+            // The system already dropped the registration, so there is nothing
+            // to unregister: just report "could not resolve".
+            if (delivered.compareAndSet(false, true)) onResolved(null, null)
+        }
+
+        override fun onServiceInfoCallbackUnregistered() {
+            // Unregistering happens exactly once, right before delivering.
+        }
+
+        /** Registration never reached the system (synchronous failure). */
+        fun onRegistrationAborted() {
+            if (delivered.compareAndSet(false, true)) onResolved(null, null)
+        }
+
+        private fun unregisterQuietly() {
+            try {
+                manager.unregisterServiceInfoCallback(this)
+            } catch (_: Exception) {
+                // Already unregistered / never registered: nothing to do.
+            }
+        }
+    }
+
+    /** Display name of a resolved service (service name, else its type). */
+    private fun nameOf(service: NsdServiceInfo): String? =
+        service.serviceName?.takeIf { it.isNotBlank() } ?: service.serviceType
+
+    /**
+     * Address of a resolved service. `getHost()` was deprecated in API 34 in
+     * favour of `getHostAddresses()`, which does not exist on older devices,
+     * so both paths are kept and only the legacy one is suppressed.
+     */
+    @Suppress("DEPRECATION") // the only accessor below API 34
+    private fun serviceHostAddress(service: NsdServiceInfo): String? {
+        val address = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            service.hostAddresses.firstOrNull()
+        } else {
+            service.host
+        }
+        return address?.hostAddress
     }
 
     /** Returns the cached mDNS name for [ip], if previously discovered. */

@@ -69,11 +69,11 @@ jobs:
           restore-keys: |
             github-run-
 
-      # Optional signing: when the keystore secrets are configured, materialize
-      # them into app/release.properties + keystore.jks (both git-ignored) so
-      # assembleRelease signs the APK. With no secrets the build still succeeds
-      # and produces a genuine unsigned release APK (minify + shrink enabled).
-      - name: Configure release signing (optional)
+      # Signing: with the keystore secrets configured the release uses the
+      # project key. Without them, generate an ephemeral self-signed JKS
+      # keystore on the runner so the APK is ALWAYS signed — Android rejects
+      # unsigned APKs ("paquete no válido" / "app not installed").
+      - name: Configure release signing
         env:
           ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
           ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
@@ -81,17 +81,32 @@ jobs:
           ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_RELEASE_KEYSTORE_BASE64" ]; then
-            echo "No keystore secret configured — building an unsigned release APK."
-            exit 0
+            echo "No keystore secrets configured — generating an ephemeral CI keystore"
+            echo "(self-signed: installable on any device, not suitable for Play Store)."
+            keytool -genkeypair -storetype JKS \
+              -keystore keystore.jks \
+              -alias wifiscanner-ci \
+              -keyalg RSA -keysize 2048 -validity 3650 \
+              -storepass wifiscanner-ci \
+              -keypass wifiscanner-ci \
+              -dname "CN=Wi-Fi LAN Scanner CI, OU=CI, O=CI, C=US"
+            {
+              echo "storeFile=../keystore.jks"
+              echo "storePassword=wifiscanner-ci"
+              echo "keyAlias=wifiscanner-ci"
+              echo "keyPassword=wifiscanner-ci"
+            } > app/release.properties
+            echo "Ephemeral CI keystore ready."
+          else
+            echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > keystore.jks
+            {
+              echo "storeFile=../keystore.jks"
+              echo "storePassword=$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+              echo "keyAlias=$ANDROID_RELEASE_KEY_ALIAS"
+              echo "keyPassword=$ANDROID_RELEASE_KEY_PASSWORD"
+            } > app/release.properties
+            echo "Release signing configured from repository secrets."
           fi
-          echo "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 -d > keystore.jks
-          {
-            echo "storeFile=../keystore.jks"
-            echo "storePassword=$ANDROID_RELEASE_KEYSTORE_PASSWORD"
-            echo "keyAlias=$ANDROID_RELEASE_KEY_ALIAS"
-            echo "keyPassword=$ANDROID_RELEASE_KEY_PASSWORD"
-          } > app/release.properties
-          echo "Release signing configured from repository secrets."
 
       - name: Build release APK
         id: build
@@ -108,6 +123,14 @@ jobs:
             exit 1
           fi
           APK=$(echo "$apks" | head -n 1)
+          # Safety net: an unsigned artifact can never ship, because Android
+          # rejects it on install ("paquete no válido" / "app not installed").
+          case "$APK" in
+            *unsigned*)
+              echo "::error::Built APK is unsigned ($APK); installation would fail on Android"
+              exit 1
+              ;;
+          esac
           echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
           echo "apk_size=$(stat -Lc %s "$APK")" >> "$GITHUB_OUTPUT"
           echo "apk_name=$(basename "$APK")" >> "$GITHUB_OUTPUT"
@@ -120,6 +143,16 @@ jobs:
           if command -v apksigner >/dev/null 2>&1; then
             apksigner verify --print-certs "$APK" || true
           fi
+
+      - name: Install instructions (job summary)
+        run: |
+          {
+            echo "## Install the APK"
+            echo ""
+            echo "- **Actions → Artifacts** download is a **.zip**: unzip it first and copy the \`.apk\` inside to the phone — installing the zip itself fails with \"paquete no válido / app not installed\"."
+            echo "- **Tagged builds (\`v*\`)** attach the raw \`.apk\` to the GitHub **Release** page — download that file directly."
+            echo "- On the phone enable *Install unknown apps* for your file manager, or run \`adb install -r <apk>\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4

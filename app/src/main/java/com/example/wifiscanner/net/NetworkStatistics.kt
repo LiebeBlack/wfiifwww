@@ -214,21 +214,15 @@ object NetworkStatistics {
                     else -> "Other"
                 },
                 metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
-            vpn = anyVpnActive(cm),
+            // "Active network uses VPN": when a VPN is up it *is* the active
+            // network, and the stats card describes the link actually in use.
+            vpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN),
             downstreamKbps = caps.linkDownstreamBandwidthKbps.takeIf { it > 0 },
             upstreamKbps = caps.linkUpstreamBandwidthKbps.takeIf { it > 0 },
         )
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun anyVpnActive(cm: ConnectivityManager): Boolean? = try {
-        cm.allNetworks.any { network ->
-            cm.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-        }
-    } catch (_: Exception) {
-        null
     }
 
     private fun String.stripQuotes(): String = trim().removeSurrounding("\"")

@@ -16,13 +16,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.material3.Button
@@ -342,7 +342,7 @@ private fun SearchAndSortBar(
         Box {
             TextButton(onClick = { menuOpen = true }) {
                 Icon(
-                    imageVector = Icons.Filled.Sort,
+                    imageVector = Icons.AutoMirrored.Filled.Sort,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
